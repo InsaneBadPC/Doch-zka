@@ -13,7 +13,8 @@ service cloud.firestore {
     function isBootstrappedAdmin() {
       return isSignedIn() && (
         request.auth.token.email == 'insanebad2@gmail.com' ||
-        request.auth.token.email == 'admin@firma.cz'
+        request.auth.token.email == 'admin@firma.cz' ||
+        request.auth.token.email == 'marek.dubina@dochazka.cz'
       );
     }
 
