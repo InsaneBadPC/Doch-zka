@@ -30,7 +30,7 @@ class AuthService {
 
       final doc = await _firestore.collection('users').doc(user.uid).get();
       if (doc.exists) {
-        return AppUser.fromMap(doc.data()!);
+        return AppUser.fromMap(user.uid, doc.data()!);
       }
 
       final isOwner = user.email?.toLowerCase() == 'insanebad2@gmail.com';
@@ -113,7 +113,7 @@ class AuthService {
       final uid = cred.user!.uid;
       final doc = await _firestore.collection('users').doc(uid).get();
       if (doc.exists) {
-        return AppUser.fromMap(doc.data()!);
+        return AppUser.fromMap(uid, doc.data()!);
       }
       final bossUser = AppUser(
         id: uid,
