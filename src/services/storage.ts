@@ -2,53 +2,33 @@ import { Absence, AbsenceStatus, AppUser, Project, ProjectPhoto, ProjectStatus, 
 import { firestoreSyncService } from './firestoreService';
 
 const STORAGE_KEY_USERS = 'dochazka_users_v2';
-const STORAGE_KEY_PROJECTS = 'dochazka_projects_v2';
-const STORAGE_KEY_ENTRIES = 'dochazka_entries_v2';
+const STORAGE_KEY_PROJECTS = 'dochazka_projects_v3';
+const STORAGE_KEY_ENTRIES = 'dochazka_entries_v3';
 const STORAGE_KEY_CURRENT_USER = 'dochazka_auth_user_v3';
-const STORAGE_KEY_PHOTOS = 'dochazka_photos_v2';
-const STORAGE_KEY_ABSENCES = 'dochazka_absences_v2';
+const STORAGE_KEY_PHOTOS = 'dochazka_photos_v3';
+const STORAGE_KEY_ABSENCES = 'dochazka_absences_v3';
+
+export const BOSS_NAME = 'Marek Dubina';
+export const BOSS_PASSWORD = 'MarekDubina4786';
+export const BOSS_EMAIL = 'marek.dubina@dochazka.cz';
 
 const OWNER_EMAIL = 'insanebad2@gmail.com';
-const OWNER_NAME = 'Správce docházky';
+const OWNER_NAME = BOSS_NAME;
 
 const INITIAL_USERS: AppUser[] = [
   {
-    id: 'user-owner',
-    name: OWNER_NAME,
-    email: OWNER_EMAIL,
+    id: 'user-boss-marek-dubina',
+    name: BOSS_NAME,
+    email: BOSS_EMAIL,
     role: 'admin',
     defaultHourlyRate: 350,
     allowCustomRate: true,
     active: true,
+    password: BOSS_PASSWORD,
   },
 ];
 
-const INITIAL_PROJECTS: Project[] = [
-  {
-    id: 'proj-1',
-    name: 'Rekonstrukce areálu A',
-    client: 'Stavba Plus s.r.o.',
-    status: 'open',
-    budgetLimitKcz: 120000,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'proj-2',
-    name: 'Elektroinstalace a FVE',
-    client: 'Energo Solar a.s.',
-    status: 'open',
-    budgetLimitKcz: 80000,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'proj-3',
-    name: 'Servisní údržba',
-    client: 'Facility Management CZ',
-    status: 'open',
-    budgetLimitKcz: 45000,
-    createdAt: new Date().toISOString(),
-  },
-];
+const INITIAL_PROJECTS: Project[] = [];
 
 class StorageService {
   private listeners: (() => void)[] = [];
@@ -58,20 +38,26 @@ class StorageService {
   }
 
   private initStorage() {
+    try {
+      localStorage.removeItem('dochazka_projects_v2');
+      localStorage.removeItem('dochazka_entries_v2');
+      localStorage.removeItem('dochazka_photos_v2');
+      localStorage.removeItem('dochazka_absences_v2');
+      localStorage.removeItem('dochazka_auth_user_v2');
+      localStorage.removeItem('dochazka_auth_user');
+      localStorage.removeItem('dochazka_projects');
+      localStorage.removeItem('dochazka_entries');
+    } catch {}
+
     if (!localStorage.getItem(STORAGE_KEY_USERS)) {
       localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(INITIAL_USERS));
     }
     if (!localStorage.getItem(STORAGE_KEY_PROJECTS)) {
-      localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify(INITIAL_PROJECTS));
+      localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify([]));
     }
     if (!localStorage.getItem(STORAGE_KEY_ENTRIES)) {
       localStorage.setItem(STORAGE_KEY_ENTRIES, JSON.stringify([]));
     }
-    // Bezpečnost: Nikdy automaticky nepřihlašovat uživatele při startu!
-    try {
-      localStorage.removeItem('dochazka_auth_user_v2');
-      localStorage.removeItem('dochazka_auth_user');
-    } catch {}
     if (!localStorage.getItem(STORAGE_KEY_PHOTOS)) {
       localStorage.setItem(STORAGE_KEY_PHOTOS, JSON.stringify([]));
     }
@@ -114,10 +100,62 @@ class StorageService {
     this.notify();
   }
 
-  login(email: string, password?: string): AppUser | null {
+  loginBoss(password: string, loginName?: string): AppUser {
+    const cleanPass = password.trim();
+    if (cleanPass !== BOSS_PASSWORD) {
+      throw new Error('Nesprávné heslo pro přístup vedení.');
+    }
+
+    if (loginName && loginName.trim().toLowerCase() !== BOSS_NAME.toLowerCase()) {
+      throw new Error('Neznámé jméno správce.');
+    }
+
     const users = this.getUsers();
-    const cleanEmail = email.trim().toLowerCase();
-    const found = users.find((u) => u.email.toLowerCase() === cleanEmail);
+    let boss = users.find(
+      (u) =>
+        u.name.toLowerCase() === BOSS_NAME.toLowerCase() ||
+        u.email.toLowerCase() === BOSS_EMAIL.toLowerCase() ||
+        u.role === 'admin'
+    );
+
+    if (!boss) {
+      boss = {
+        id: 'user-boss-marek-dubina',
+        name: BOSS_NAME,
+        email: BOSS_EMAIL,
+        role: 'admin',
+        defaultHourlyRate: 350,
+        allowCustomRate: true,
+        active: true,
+        password: BOSS_PASSWORD,
+      };
+      users.unshift(boss);
+      localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(users));
+    } else {
+      boss.name = BOSS_NAME;
+      boss.role = 'admin';
+      boss.password = BOSS_PASSWORD;
+      boss.allowCustomRate = true;
+      boss.active = true;
+      this.updateUser(boss);
+    }
+
+    this.setCurrentUser(boss);
+    return boss;
+  }
+
+  login(identifier: string, password?: string): AppUser | null {
+    const users = this.getUsers();
+    const cleanId = identifier.trim().toLowerCase();
+
+    // Pokud se snaží přihlásit jako Marek Dubina
+    if (cleanId === BOSS_NAME.toLowerCase() || cleanId === BOSS_EMAIL.toLowerCase()) {
+      return this.loginBoss(password || '', cleanId === BOSS_NAME.toLowerCase() ? BOSS_NAME : undefined);
+    }
+
+    const found = users.find(
+      (u) => u.email.toLowerCase() === cleanId || u.name.toLowerCase() === cleanId
+    );
     if (!found) {
       return null;
     }
