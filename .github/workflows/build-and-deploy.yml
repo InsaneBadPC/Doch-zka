@@ -56,10 +56,12 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Příprava Android struktury
+      - name: Příprava a oprava Android struktury
         run: |
           flutter config --no-analytics
-          git checkout android/app/build.gradle || true
+          flutter create . --platforms=android --org cz.dochazka
+          git checkout android/app/build.gradle
+          git checkout android/gradle.properties
 
       - name: Stažení Flutter balíčků
         run: flutter pub get
