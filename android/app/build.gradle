@@ -50,9 +50,18 @@ android {
         multiDexEnabled true
     }
 
+    signingConfigs {
+        release {
+            storeFile file('../dochazka-release.jks')
+            storePassword 'dochazka2026'
+            keyAlias 'dochazka'
+            keyPassword 'dochazka2026'
+        }
+    }
+
     buildTypes {
         release {
-            signingConfig signingConfigs.debug
+            signingConfig signingConfigs.release
             minifyEnabled false
             shrinkResources false
         }

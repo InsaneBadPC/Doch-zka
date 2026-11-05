@@ -56,18 +56,18 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Příprava a oprava Android struktury
+      - name: Příprava Android struktury
         run: |
           flutter config --no-analytics
-          flutter create . --platforms=android --org cz.dochazka
+          git checkout android/app/build.gradle || true
 
       - name: Stažení Flutter balíčků
         run: flutter pub get
 
       - name: Sestavení Release APK balíčku
         run: |
-          flutter build apk --release --android-skip-build-dependency-validation
-          APP_VER=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1)
+          APP_VER="1.0.${{ github.run_number }}"
+          flutter build apk --release --build-name="${APP_VER}" --build-number=${{ github.run_number }} --android-skip-build-dependency-validation
           cp build/app/outputs/flutter-apk/app-release.apk "build/app/outputs/flutter-apk/Dochazka-v${APP_VER}.apk"
           echo "APP_VER=${APP_VER}" >> $GITHUB_ENV
 
