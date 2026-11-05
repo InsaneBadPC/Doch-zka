@@ -347,7 +347,7 @@ class _WorkerDashboardState extends State<WorkerDashboard> {
                             title: 'SCHVÁLENO K VÝPLATĚ',
                             amount: approvedAmount,
                             hours: approvedHours,
-                            color: Colors.emerald if true else Colors.green, // robust material green
+                            color: Colors.green, // robust material green
                             icon: Icons.check_circle_outline,
                           ),
                         ),

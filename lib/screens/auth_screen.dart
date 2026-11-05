@@ -125,9 +125,7 @@ class _AuthScreenState extends State<AuthScreen> {
                           decoration: BoxDecoration(
                             color: Colors.red.shade50,
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.parse(
-                              BorderSide(color: Colors.red.shade200).toString(),
-                            ),
+                            border: Border.all(color: Colors.red.shade200),
                           ),
                           child: Text(
                             _errorMessage!,
