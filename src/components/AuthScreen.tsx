@@ -26,11 +26,10 @@ export const AuthScreen: React.FC = () => {
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [name, setName] = useState('');
-  const [email, setEmail] = useState('insanebad2@gmail.com');
-  const [password, setPassword] = useState('••••••••');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [hourlyRate, setHourlyRate] = useState(350);
-  const [role, setRole] = useState<'worker' | 'admin'>('admin');
+  const [hourlyRate, setHourlyRate] = useState(250);
   const [error, setError] = useState<string | null>(null);
 
   // Živý ticker pro demonstraci v levém panelu
@@ -79,48 +78,37 @@ export const AuthScreen: React.FC = () => {
     e.preventDefault();
     setError(null);
 
+    const cleanEmail = email.trim();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      setError('Zadejte platnou e-mailovou adresu.');
+      return;
+    }
+
+    if (!password || password.length < 4) {
+      setError('Heslo musí mít alespoň 4 znaky.');
+      return;
+    }
+
     if (isRegister) {
       if (!name.trim()) {
         setError('Zadejte své celé jméno a příjmení.');
         return;
       }
-      if (!email.includes('@')) {
-        setError('Zadejte platnou firemní e-mailovou adresu.');
-        return;
-      }
       try {
-        storageService.register(name, email, role, hourlyRate);
+        storageService.register(name, cleanEmail, 'worker', hourlyRate, password);
       } catch (err: any) {
         setError(err.message || 'Chyba při registraci.');
       }
     } else {
-      if (!email.trim()) {
-        setError('Zadejte e-mail.');
-        return;
-      }
-      const logged = storageService.login(email);
-      if (!logged) {
-        // Pokud ještě neexistuje v lokální databázi, automaticky ho vytvoříme
-        try {
-          const autoRole = email.toLowerCase() === 'insanebad2@gmail.com' ? 'admin' : 'worker';
-          storageService.register(
-            email.split('@')[0],
-            email,
-            autoRole,
-            autoRole === 'admin' ? 350 : 250
-          );
-        } catch {
-          setError('Uživatel s tímto e-mailem nebyl nalezen.');
+      try {
+        const logged = storageService.login(cleanEmail, password);
+        if (!logged) {
+          setError('Uživatel s tímto e-mailem nebyl nalezen. Zaregistrujte se prosím.');
         }
+      } catch (err: any) {
+        setError(err.message || 'Nesprávné přihlašovací údaje.');
       }
     }
-  };
-
-  const handleQuickFillBoss = () => {
-    setEmail('insanebad2@gmail.com');
-    setPassword('••••••••');
-    setIsRegister(false);
-    setError(null);
   };
 
   return (
@@ -221,18 +209,6 @@ export const AuthScreen: React.FC = () => {
               <CheckCircle2 className="w-4 h-4 text-[#D4F73C] shrink-0" />
               <span>Export měsíční uzávěrky pro český Excel s oddělovačem středník (;)</span>
             </div>
-          </div>
-
-          {/* Rychlý přístup pro správce */}
-          <div className="flex flex-wrap items-center gap-2.5 pt-1">
-            <span className="text-xs text-slate-400 font-mono">Rychlé předvyplnění:</span>
-            <button
-              type="button"
-              onClick={handleQuickFillBoss}
-              className="px-3.5 py-1.5 rounded-xl bg-[#171B17] hover:bg-[#202720] border border-[#2A342A] text-xs font-mono text-[#D4F73C] flex items-center gap-1.5 transition active:scale-95"
-            >
-              <Zap className="w-3.5 h-3.5" /> insanebad2@gmail.com (Šéf)
-            </button>
           </div>
         </div>
 
@@ -388,32 +364,20 @@ export const AuthScreen: React.FC = () => {
               </div>
 
               {isRegister && (
-                <div className="grid grid-cols-2 gap-3 pt-1">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                      Role v aplikaci
-                    </label>
-                    <select
-                      value={role}
-                      onChange={(e) => setRole(e.target.value as any)}
-                      className="w-full px-3 py-3 bg-[#0A0D0B] border border-[#232A23] focus:border-[#D4F73C] rounded-2xl text-white text-xs focus:outline-none"
-                    >
-                      <option value="worker">Pracovník</option>
-                      <option value="admin">Administrátor</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                      Sazba (Kč/h)
-                    </label>
-                    <input
-                      type="number"
-                      value={hourlyRate}
-                      min={50}
-                      onChange={(e) => setHourlyRate(Number(e.target.value))}
-                      className="w-full px-3 py-3 bg-[#0A0D0B] border border-[#232A23] focus:border-[#D4F73C] rounded-2xl text-white text-xs font-mono focus:outline-none"
-                    />
-                  </div>
+                <div className="pt-1">
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Výchozí hodinová sazba (Kč/h)
+                  </label>
+                  <input
+                    type="number"
+                    value={hourlyRate}
+                    min={50}
+                    onChange={(e) => setHourlyRate(Number(e.target.value))}
+                    className="w-full px-3 py-3 bg-[#0A0D0B] border border-[#232A23] focus:border-[#D4F73C] rounded-2xl text-white text-xs font-mono focus:outline-none"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1 font-mono">
+                    Každý nový profil je registrován s rolí Pracovník.
+                  </p>
                 </div>
               )}
 

@@ -8,6 +8,7 @@ export interface AppUser {
   defaultHourlyRate: number; // in CZK
   allowCustomRate: boolean;
   active: boolean;
+  password?: string;
 }
 
 export type ProjectStatus = 'open' | 'closed';

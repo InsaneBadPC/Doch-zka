@@ -4,7 +4,7 @@ import { firestoreSyncService } from './firestoreService';
 const STORAGE_KEY_USERS = 'dochazka_users_v2';
 const STORAGE_KEY_PROJECTS = 'dochazka_projects_v2';
 const STORAGE_KEY_ENTRIES = 'dochazka_entries_v2';
-const STORAGE_KEY_CURRENT_USER = 'dochazka_auth_user_v2';
+const STORAGE_KEY_CURRENT_USER = 'dochazka_auth_user_v3';
 const STORAGE_KEY_PHOTOS = 'dochazka_photos_v2';
 const STORAGE_KEY_ABSENCES = 'dochazka_absences_v2';
 
@@ -67,9 +67,11 @@ class StorageService {
     if (!localStorage.getItem(STORAGE_KEY_ENTRIES)) {
       localStorage.setItem(STORAGE_KEY_ENTRIES, JSON.stringify([]));
     }
-    if (!localStorage.getItem(STORAGE_KEY_CURRENT_USER)) {
-      localStorage.setItem(STORAGE_KEY_CURRENT_USER, JSON.stringify(INITIAL_USERS[0]));
-    }
+    // Bezpečnost: Nikdy automaticky nepřihlašovat uživatele při startu!
+    try {
+      localStorage.removeItem('dochazka_auth_user_v2');
+      localStorage.removeItem('dochazka_auth_user');
+    } catch {}
     if (!localStorage.getItem(STORAGE_KEY_PHOTOS)) {
       localStorage.setItem(STORAGE_KEY_PHOTOS, JSON.stringify([]));
     }
@@ -112,17 +114,36 @@ class StorageService {
     this.notify();
   }
 
-  login(email: string): AppUser | null {
+  login(email: string, password?: string): AppUser | null {
     const users = this.getUsers();
-    const found = users.find((u) => u.email.toLowerCase() === email.trim().toLowerCase());
-    if (found) {
-      this.setCurrentUser(found);
-      return found;
+    const cleanEmail = email.trim().toLowerCase();
+    const found = users.find((u) => u.email.toLowerCase() === cleanEmail);
+    if (!found) {
+      return null;
     }
-    return null;
+
+    // Pokud uživatel má uložené heslo a heslo bylo zadáno, ověříme shodu
+    if (found.password && password && found.password !== password) {
+      throw new Error('Nesprávné heslo.');
+    }
+
+    // Pokud je uživatel bez nastaveného hesla (např. z importu), nastavíme ho při prvním přihlášení
+    if (!found.password && password) {
+      found.password = password;
+      this.updateUser(found);
+    }
+
+    this.setCurrentUser(found);
+    return found;
   }
 
-  register(name: string, email: string, role: 'worker' | 'admin' = 'worker', rate: number = 250): AppUser {
+  register(
+    name: string,
+    email: string,
+    role: 'worker' | 'admin' = 'worker',
+    rate: number = 250,
+    password?: string
+  ): AppUser {
     const users = this.getUsers();
     const cleanEmail = email.trim().toLowerCase();
     const existing = users.find((u) => u.email.toLowerCase() === cleanEmail);
@@ -136,10 +157,11 @@ class StorageService {
       id: 'usr-' + Date.now(),
       name: name.trim(),
       email: cleanEmail,
-      role: isOwner ? 'admin' : role,
+      role: isOwner ? 'admin' : 'worker', // Nově registrovaní uživatelé jsou vždy 'worker', pouze systémový vlastník je 'admin'
       defaultHourlyRate: rate,
       allowCustomRate: isOwner,
       active: true,
+      password: password || undefined,
     };
 
     users.push(newUser);
