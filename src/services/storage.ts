@@ -73,7 +73,7 @@ class StorageService {
     };
   }
 
-  private notify() {
+  notify() {
     this.listeners.forEach((l) => l());
   }
 

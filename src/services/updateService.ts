@@ -75,7 +75,9 @@ class UpdateService {
   private async initServiceWorker() {
     if ('serviceWorker' in navigator && process.env.NODE_ENV !== 'development') {
       try {
-        const reg = await navigator.serviceWorker.register('/sw.js');
+        const baseUrl = (import.meta as any).env?.BASE_URL || './';
+        const cleanBase = baseUrl.endsWith('/') ? baseUrl : baseUrl + '/';
+        const reg = await navigator.serviceWorker.register(`${cleanBase}sw.js`);
         this.swRegistration = reg;
 
         reg.addEventListener('updatefound', () => {
@@ -137,7 +139,9 @@ class UpdateService {
 
       // 2. Načti aktuální version.json s cache-busting parametrem
       const cacheBuster = Date.now();
-      const response = await fetch(`/version.json?_t=${cacheBuster}`, {
+      const baseUrl = (import.meta as any).env?.BASE_URL || './';
+      const cleanBase = baseUrl.endsWith('/') ? baseUrl : baseUrl + '/';
+      const response = await fetch(`${cleanBase}version.json?_t=${cacheBuster}`, {
         cache: 'no-store',
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',

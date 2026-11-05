@@ -100,13 +100,12 @@ class FirestoreSyncService {
           });
 
           if (remoteList.length > 0) {
-            // Sloučíme s lokálním úložištěm
             const local = storageService.getAbsences();
             const localMap = new Map(local.map((a) => [a.id, a]));
             remoteList.forEach((r) => localMap.set(r.id, r));
             const merged = Array.from(localMap.values());
-            localStorage.setItem('dochazka_absences_v2', JSON.stringify(merged));
-            // Trigger notify without infinite loop
+            localStorage.setItem('dochazka_absences_v3', JSON.stringify(merged));
+            storageService.notify();
           }
         },
         (error) => {
@@ -133,7 +132,8 @@ class FirestoreSyncService {
             const localMap = new Map(local.map((p) => [p.id, p]));
             remotePhotos.forEach((r) => localMap.set(r.id, r));
             const merged = Array.from(localMap.values());
-            localStorage.setItem('dochazka_photos_v2', JSON.stringify(merged));
+            localStorage.setItem('dochazka_photos_v3', JSON.stringify(merged));
+            storageService.notify();
           }
         },
         (error) => {
@@ -160,7 +160,8 @@ class FirestoreSyncService {
             const localMap = new Map(local.map((p) => [p.id, p]));
             remoteProjects.forEach((r) => localMap.set(r.id, r));
             const merged = Array.from(localMap.values());
-            localStorage.setItem('dochazka_projects_v2', JSON.stringify(merged));
+            localStorage.setItem('dochazka_projects_v3', JSON.stringify(merged));
+            storageService.notify();
           }
         },
         (error) => {
@@ -170,6 +171,43 @@ class FirestoreSyncService {
       this.unsubscribeFns.push(projectsUnsub);
     } catch (e) {
       console.warn('Could not attach projects listener:', e);
+    }
+
+    // 4. Synchronizace Směn (Time Entries)
+    try {
+      const entriesUnsub = onSnapshot(
+        collection(db, 'time_entries'),
+        (snapshot) => {
+          const remoteEntries: TimeEntry[] = [];
+          snapshot.forEach((d) => {
+            const data = d.data();
+            let appAt = data.approvedAt;
+            if (appAt && typeof appAt === 'object' && typeof appAt.toDate === 'function') {
+              appAt = appAt.toDate().toISOString();
+            }
+            remoteEntries.push({
+              id: d.id,
+              ...data,
+              approvedAt: appAt || null,
+            } as TimeEntry);
+          });
+
+          if (remoteEntries.length > 0) {
+            const local = storageService.getTimeEntries();
+            const localMap = new Map(local.map((e) => [e.id, e]));
+            remoteEntries.forEach((r) => localMap.set(r.id, r));
+            const merged = Array.from(localMap.values());
+            localStorage.setItem('dochazka_entries_v3', JSON.stringify(merged));
+            storageService.notify();
+          }
+        },
+        (error) => {
+          console.warn('Realtime sync time_entries note:', error.message);
+        }
+      );
+      this.unsubscribeFns.push(entriesUnsub);
+    } catch (e) {
+      console.warn('Could not attach time_entries listener:', e);
     }
   }
 

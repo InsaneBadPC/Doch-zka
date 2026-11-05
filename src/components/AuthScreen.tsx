@@ -51,7 +51,11 @@ export const AuthScreen: React.FC = () => {
         );
       }
     } catch (err: any) {
-      if (err.code !== 'auth/popup-closed-by-user') {
+      if (err.code === 'auth/unauthorized-domain') {
+        setError(
+          'Doména insanebadpc.github.io zatím není povolena ve Firebase Console (Authentication > Settings > Authorized domains). Prozatím se prosím přihlaste níže e-mailem a heslem.'
+        );
+      } else if (err.code !== 'auth/popup-closed-by-user') {
         setError(err.message || 'Nepodařilo se přihlásit přes Google.');
       }
     } finally {

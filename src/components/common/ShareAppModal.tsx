@@ -28,7 +28,7 @@ export const ShareAppModal: React.FC<ShareAppModalProps> = ({ isOpen, onClose })
   const webAppUrl = currentOrigin.replace(/\/+$/, '');
 
   // Odkaz na nejnovější stažení Android APK z GitHub Releases
-  const apkDownloadUrl = 'https://github.com/dochazka-app/releases/latest/download/app-release.apk';
+  const apkDownloadUrl = 'https://github.com/InsaneBadPC/Doch-zka/releases/latest/download/app-release.apk';
 
   const handleCopy = async (text: string, type: 'web' | 'apk') => {
     try {
@@ -142,8 +142,8 @@ export const ShareAppModal: React.FC<ShareAppModalProps> = ({ isOpen, onClose })
                 Nativní Android aplikace (.apk)
               </span>
             </div>
-            <span className="text-[10px] font-mono text-slate-300 bg-[#161B16] px-2 py-0.5 rounded-full border border-[#232A23]">
-              Release v2.4
+            <span className="text-[10px] font-mono text-[#D4F73C] bg-[#161B16] px-2 py-0.5 rounded-full border border-[#232A23]">
+              Nejnovější APK
             </span>
           </div>
 

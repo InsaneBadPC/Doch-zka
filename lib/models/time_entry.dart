@@ -68,7 +68,11 @@ class TimeEntry {
       isRunning: data['isRunning'] as bool? ?? false,
       adminComment: data['adminComment'] as String? ?? '',
       approvedBy: data['approvedBy'] as String?,
-      approvedAt: data['approvedAt'] is Timestamp ? data['approvedAt'] as Timestamp : null,
+      approvedAt: data['approvedAt'] is Timestamp
+          ? data['approvedAt'] as Timestamp
+          : (data['approvedAt'] is String && (data['approvedAt'] as String).isNotEmpty
+              ? Timestamp.fromDate(DateTime.tryParse(data['approvedAt'] as String) ?? DateTime.now())
+              : null),
     );
   }
 
