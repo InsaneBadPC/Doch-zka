@@ -1,0 +1,6 @@
+{
+  "name": "Firemní Docházka a Evidence Zakázek",
+  "description": "Multiplatformní systém firemní docházky a evidence zakázek s živými stopkami, schvalováním směn, rozpočty zakázek a měsíční uzávěrkou pro Excel.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
