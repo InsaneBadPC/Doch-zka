@@ -5,15 +5,23 @@
   :root {
     --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     --font-mono: 'JetBrains Mono', monospace;
+    --color-neon-lime: #D4F73C;
+    --color-neon-coral: #FF5B65;
+    --color-bg-dark: #090B0A;
+    --color-card-dark: #121513;
+    --color-border-dark: #222822;
   }
 
   html {
     font-family: var(--font-sans);
+    background-color: #090b0a;
   }
 
   body {
     margin: 0;
     padding: 0;
+    background-color: #090b0a;
+    color: #f1f5f9;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     -webkit-tap-highlight-color: transparent;

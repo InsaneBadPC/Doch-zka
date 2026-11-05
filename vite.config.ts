@@ -1,10 +1,54 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import fs from 'fs';
 import {defineConfig} from 'vite';
 
-export default defineConfig(() => {
+// Pomocná funkce pro automatické verzování sestavení
+function getOrIncrementBuildVersion(isBuild: boolean) {
+  const versionPath = path.resolve(__dirname, 'public/version.json');
+  let data = {
+    version: '1.0.1',
+    buildNumber: 101,
+    buildTime: new Date().toISOString(),
+    releaseNotes: 'Automatické verzování a detekce aktualizací v aplikaci',
+    minSupportedVersion: '1.0.0',
+  };
+
+  try {
+    if (fs.existsSync(versionPath)) {
+      const raw = fs.readFileSync(versionPath, 'utf-8');
+      data = JSON.parse(raw);
+    }
+  } catch (err) {
+    console.warn('Could not read version.json, creating initial', err);
+  }
+
+  if (isBuild) {
+    data.buildNumber += 1;
+    // Automaticky odvozená vyšší verze např. 1.0.2, 1.0.3 atd.
+    const patch = data.buildNumber - 100;
+    data.version = `1.0.${patch}`;
+    data.buildTime = new Date().toISOString();
+    try {
+      fs.writeFileSync(versionPath, JSON.stringify(data, null, 2), 'utf-8');
+    } catch (err) {
+      console.warn('Could not write updated version.json', err);
+    }
+  }
+
+  return data;
+}
+
+export default defineConfig(({ command }) => {
+  const isBuild = command === 'build';
+  const buildInfo = getOrIncrementBuildVersion(isBuild);
+
   return {
+    base: './',
+    define: {
+      __APP_BUILD_INFO__: JSON.stringify(buildInfo),
+    },
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {

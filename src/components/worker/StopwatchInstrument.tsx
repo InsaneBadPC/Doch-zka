@@ -1,7 +1,7 @@
 import React from 'react';
 import { Project, TimeEntry } from '../../types';
 import { formatDuration, formatKcz, formatTimeFromIso } from '../../utils/formatters';
-import { Play, Square, Briefcase, Zap, TrendingUp, Clock } from 'lucide-react';
+import { Play, Square, Briefcase, TrendingUp, Clock, Zap, MapPin, Compass } from 'lucide-react';
 
 interface StopwatchInstrumentProps {
   runningShift?: TimeEntry;
@@ -11,6 +11,8 @@ interface StopwatchInstrumentProps {
   onStart: () => void;
   onStop: () => void;
   currentTime: number;
+  isLocatingGps?: boolean;
+  onOpenGpsModal?: (entry: TimeEntry) => void;
 }
 
 export const StopwatchInstrument: React.FC<StopwatchInstrumentProps> = ({
@@ -21,6 +23,8 @@ export const StopwatchInstrument: React.FC<StopwatchInstrumentProps> = ({
   onStart,
   onStop,
   currentTime,
+  isLocatingGps = false,
+  onOpenGpsModal,
 }) => {
   const openProjects = projects.filter((p) => p.status === 'open');
   const activeProject = projects.find((p) => p.id === (runningShift ? runningShift.projectId : selectedProjectId));
@@ -38,47 +42,66 @@ export const StopwatchInstrument: React.FC<StopwatchInstrumentProps> = ({
   }
 
   // Kruhový diagram stopek (sekundy 0..60 a hodiny 0..8)
-  const secondsInMinute = elapsedSec % 60;
   const progressRatio = runningShift ? Math.min(1, runningHours / 8) : 0;
   const strokeDashoffset = 283 - 283 * progressRatio;
 
   return (
-    <div className="relative overflow-hidden bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-sm">
-      {/* Background ambient mesh */}
-      <div className="absolute top-0 right-0 w-96 h-96 bg-amber-500/5 dark:bg-amber-400/5 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20"></div>
+    <div className="relative overflow-hidden bg-[#121513] border border-[#232A23] rounded-[32px] p-6 sm:p-8 shadow-2xl">
+      {/* Background ambient radial glow */}
+      <div className="absolute top-0 right-0 w-96 h-96 bg-[#D4F73C]/10 rounded-full blur-[110px] pointer-events-none -mr-20 -mt-20"></div>
 
       <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-8">
         {/* Levá část: Výběr zakázky & stav */}
         <div className="flex-1 space-y-4">
           <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
-            <span className="text-xs uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400">
-              Průmyslový časoměřič zakázek
+            <span className="w-2.5 h-2.5 rounded-full bg-[#D4F73C] animate-pulse"></span>
+            <span className="text-xs uppercase tracking-wider font-mono font-bold text-slate-400">
+              Chytrý časoměřič zakázek
             </span>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
-              <Briefcase className="w-3.5 h-3.5 text-amber-500" />
+            <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
+              <Briefcase className="w-4 h-4 text-[#D4F73C]" />
               {runningShift ? 'Aktivní zakázka směny:' : 'Vyberte otevřenou zakázku:'}
             </label>
 
             {runningShift ? (
-              <div className="p-3.5 bg-slate-50 dark:bg-[#090d16] border border-slate-200 dark:border-slate-800 rounded-2xl">
-                <div className="text-lg font-bold text-slate-900 dark:text-white">
+              <div className="p-4 bg-[#0A0D0B] border border-[#232A23] rounded-2xl space-y-1">
+                <div className="text-xl font-extrabold text-white">
                   {runningShift.projectName}
                 </div>
-                <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-2">
-                  <span>Zahájeno v: <strong className="text-slate-700 dark:text-slate-200 font-mono">{formatTimeFromIso(runningShift.startTime)}</strong></span>
-                  <span>·</span>
-                  <span>Sazba: <strong className="text-slate-700 dark:text-slate-200 font-mono">{formatKcz(runningShift.hourlyRate)}/h</strong></span>
+                <div className="text-xs text-slate-400 mt-1 flex flex-wrap items-center gap-2 font-mono">
+                  <span>Zahájeno: <strong className="text-slate-200">{formatTimeFromIso(runningShift.startTime)}</strong></span>
+                  <span className="text-slate-600">·</span>
+                  <span>Sazba: <strong className="text-[#D4F73C]">{formatKcz(runningShift.hourlyRate)}/h</strong></span>
                 </div>
+
+                {runningShift.startLocation ? (
+                  <button
+                    type="button"
+                    onClick={() => onOpenGpsModal?.(runningShift)}
+                    className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#D4F73C]/10 border border-[#D4F73C]/30 text-[#D4F73C] text-[11px] font-mono hover:bg-[#D4F73C]/20 transition text-left"
+                    title="Klikněte pro zobrazení GPS polohy zahájení na mapě"
+                  >
+                    <MapPin className="w-3.5 h-3.5 shrink-0" />
+                    <span>GPS: {runningShift.startLocation.latitude.toFixed(4)}, {runningShift.startLocation.longitude.toFixed(4)}</span>
+                    {runningShift.startLocation.address && (
+                      <span className="text-white/70 font-sans truncate max-w-[200px]">· {runningShift.startLocation.address}</span>
+                    )}
+                  </button>
+                ) : isLocatingGps ? (
+                  <div className="mt-2 inline-flex items-center gap-1.5 text-[11px] text-[#D4F73C] font-mono animate-pulse">
+                    <Compass className="w-3.5 h-3.5 animate-spin" />
+                    <span>Zaznamenávám GPS polohu zahájení směny...</span>
+                  </div>
+                ) : null}
               </div>
             ) : (
               <select
                 value={selectedProjectId}
                 onChange={(e) => onSelectProjectId(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-50 dark:bg-[#090d16] border border-slate-300 dark:border-slate-800 rounded-2xl text-slate-900 dark:text-white text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500"
+                className="w-full px-4 py-3.5 bg-[#0A0D0B] border border-[#232A23] focus:border-[#D4F73C] rounded-2xl text-white text-sm font-semibold focus:outline-none transition"
               >
                 {openProjects.length === 0 ? (
                   <option value="">Žádná otevřená zakázka</option>
@@ -94,9 +117,9 @@ export const StopwatchInstrument: React.FC<StopwatchInstrumentProps> = ({
           </div>
 
           {activeProject && (
-            <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2 pt-0.5">
-              <TrendingUp className="w-3.5 h-3.5 text-slate-400" />
-              <span>Plánovaný rozpočet zakázky: <strong className="text-slate-700 dark:text-slate-200 font-mono">{formatKcz(activeProject.budgetLimitKcz)}</strong></span>
+            <div className="text-xs text-slate-400 flex items-center gap-2 pt-0.5 font-mono">
+              <TrendingUp className="w-3.5 h-3.5 text-[#D4F73C]" />
+              <span>Plánovaný rozpočet zakázky: <strong className="text-slate-200">{formatKcz(activeProject.budgetLimitKcz)}</strong></span>
             </div>
           )}
         </div>
@@ -112,27 +135,27 @@ export const StopwatchInstrument: React.FC<StopwatchInstrumentProps> = ({
                 cy="80"
                 r="45"
                 stroke="currentColor"
-                strokeWidth="6"
-                className="text-slate-100 dark:text-slate-800 fill-none"
+                strokeWidth="7"
+                className="text-[#1A211A] fill-none"
               />
               <circle
                 cx="80"
                 cy="80"
                 r="45"
                 stroke="currentColor"
-                strokeWidth="6"
+                strokeWidth="7"
                 strokeDasharray="283"
                 strokeDashoffset={strokeDashoffset}
                 strokeLinecap="round"
                 className={`fill-none transition-all duration-1000 ${
-                  runningShift ? 'text-amber-500' : 'text-slate-300 dark:text-slate-700'
+                  runningShift ? 'text-[#D4F73C]' : 'text-slate-700'
                 }`}
               />
             </svg>
 
             {/* Čas uvnitř kruhu */}
             <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-              <div className="font-mono tabular-nums text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+              <div className="font-mono tabular-nums text-2xl font-black text-white tracking-tight">
                 {formatDuration(elapsedSec)}
               </div>
               <div className="text-[10px] font-mono uppercase tracking-wider text-slate-400 mt-0.5">
@@ -141,24 +164,24 @@ export const StopwatchInstrument: React.FC<StopwatchInstrumentProps> = ({
             </div>
           </div>
 
-          {/* Finanční ukazatel a Tlačítko Start/Stop */}
-          <div className="flex flex-col items-center sm:items-start space-y-3 min-w-[160px]">
+          {/* Finanční ukazatel a Tlačítko Start/Stop v neonových barvách */}
+          <div className="flex flex-col items-center sm:items-start space-y-3 min-w-[170px]">
             <div>
-              <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono">
                 Naskakující výdělek
               </div>
-              <div className="font-mono tabular-nums text-2xl sm:text-3xl font-black text-emerald-600 dark:text-emerald-400">
+              <div className="font-mono tabular-nums text-2xl sm:text-3xl font-black text-[#D4F73C]">
                 {formatKcz(liveEarnings, true)}
               </div>
             </div>
 
-            <div>
+            <div className="w-full">
               {!runningShift ? (
                 <button
                   type="button"
                   disabled={openProjects.length === 0}
                   onClick={onStart}
-                  className="px-6 py-3.5 bg-amber-500 hover:bg-amber-400 active:scale-[0.98] disabled:opacity-40 text-slate-950 font-extrabold rounded-2xl shadow-lg shadow-amber-500/20 transition flex items-center gap-2 text-sm"
+                  className="w-full sm:w-auto justify-center px-6 py-3.5 bg-[#D4F73C] hover:bg-[#c4e92a] active:scale-[0.98] disabled:opacity-40 text-[#090B0A] font-extrabold rounded-2xl shadow-lg shadow-[#D4F73C]/20 transition flex items-center gap-2 text-sm cursor-pointer"
                 >
                   <Play className="w-4 h-4 fill-current" />
                   Spustit směnu (Start)
@@ -167,7 +190,7 @@ export const StopwatchInstrument: React.FC<StopwatchInstrumentProps> = ({
                 <button
                   type="button"
                   onClick={onStop}
-                  className="px-6 py-3.5 bg-red-600 hover:bg-red-500 active:scale-[0.98] text-white font-extrabold rounded-2xl shadow-lg shadow-red-600/20 transition flex items-center gap-2 text-sm"
+                  className="w-full sm:w-auto justify-center px-6 py-3.5 bg-[#FF5B65] hover:bg-[#e44c56] active:scale-[0.98] text-white font-extrabold rounded-2xl shadow-lg shadow-[#FF5B65]/20 transition flex items-center gap-2 text-sm cursor-pointer"
                 >
                   <Square className="w-4 h-4 fill-current" />
                   Ukončit směnu

@@ -2,85 +2,121 @@
   "entities": {
     "User": {
       "title": "User",
-      "description": "Systémový uživatel - pracovník nebo administrátor",
+      "description": "User profile with role, default hourly rate and account active state",
       "type": "object",
       "properties": {
-        "name": { "type": "string", "maxLength": 100 },
-        "email": { "type": "string", "format": "email", "maxLength": 120 },
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
         "role": { "type": "string", "enum": ["worker", "admin"] },
         "defaultHourlyRate": { "type": "number" },
         "allowCustomRate": { "type": "boolean" },
-        "active": { "type": "boolean" }
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string" }
       },
-      "required": ["name", "email", "role", "defaultHourlyRate", "allowCustomRate", "active"]
+      "required": ["name", "email", "role", "defaultHourlyRate", "active"]
     },
     "Project": {
       "title": "Project",
-      "description": "Firemní zakázka s rozpočtem",
+      "description": "Company construction, maintenance, or client project with budget limit and photo documentation",
       "type": "object",
       "properties": {
-        "name": { "type": "string", "maxLength": 150 },
-        "client": { "type": "string", "maxLength": 150 },
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "client": { "type": "string" },
         "status": { "type": "string", "enum": ["open", "closed"] },
         "budgetLimitKcz": { "type": "number" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "photos": { "type": "array" },
+        "createdAt": { "type": "string" }
       },
-      "required": ["name", "client", "status", "budgetLimitKcz", "createdAt"]
+      "required": ["name", "client", "status", "budgetLimitKcz"]
     },
     "TimeEntry": {
       "title": "TimeEntry",
-      "description": "Záznam odpracované směny na zakázce",
+      "description": "Attendance shift record with timestamps, hours worked, hourly rate, and approval status",
       "type": "object",
       "properties": {
-        "userId": { "type": "string", "maxLength": 128 },
-        "userName": { "type": "string", "maxLength": 100 },
-        "projectId": { "type": "string", "maxLength": 128 },
-        "projectName": { "type": "string", "maxLength": 150 },
-        "date": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
-        "startTime": { "type": "string", "format": "date-time" },
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "projectId": { "type": "string" },
+        "projectName": { "type": "string" },
+        "date": { "type": "string" },
+        "startTime": { "type": "string" },
         "endTime": { "type": "string" },
         "breakMinutes": { "type": "number" },
         "hoursWorked": { "type": "number" },
         "hourlyRate": { "type": "number" },
         "isCustomRate": { "type": "boolean" },
         "totalAmount": { "type": "number" },
-        "note": { "type": "string", "maxLength": 500 },
+        "note": { "type": "string" },
         "status": { "type": "string", "enum": ["draft", "pending", "approved", "rejected"] },
         "isRunning": { "type": "boolean" },
-        "adminComment": { "type": "string", "maxLength": 500 },
+        "adminComment": { "type": "string" },
         "approvedBy": { "type": "string" },
-        "approvedAt": { "type": "string" }
+        "approvedAt": { "type": "string" },
+        "startLocation": { "type": "object" },
+        "endLocation": { "type": "object" }
       },
-      "required": [
-        "userId",
-        "userName",
-        "projectId",
-        "projectName",
-        "date",
-        "startTime",
-        "breakMinutes",
-        "hoursWorked",
-        "hourlyRate",
-        "isCustomRate",
-        "totalAmount",
-        "note",
-        "status",
-        "isRunning"
-      ]
+      "required": ["userId", "userName", "projectId", "date", "startTime", "hourlyRate", "status"]
+    },
+    "ProjectPhoto": {
+      "title": "ProjectPhoto",
+      "description": "Project documentation photos uploaded by boss or workers",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "projectId": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "photoData": { "type": "string" },
+        "caption": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["projectId", "userId", "photoData"]
+    },
+    "Absence": {
+      "title": "Absence",
+      "description": "Employee planned leave, vacation, doctor visit or sick leave calendar entry",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "type": { "type": "string", "enum": ["vacation", "doctor", "sick", "personal"] },
+        "startDate": { "type": "string" },
+        "endDate": { "type": "string" },
+        "isFullDay": { "type": "boolean" },
+        "startTime": { "type": "string" },
+        "endTime": { "type": "string" },
+        "note": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "createdAt": { "type": "string" },
+        "approvedBy": { "type": "string" }
+      },
+      "required": ["userId", "userName", "type", "startDate", "endDate", "isFullDay", "status"]
     }
   },
   "firestore": {
     "/users/{userId}": {
-      "schema": { "$ref": "entities/User" },
-      "description": "Profily uživatelů"
+      "schema": "User",
+      "description": "Uživatelské profily pracovníků a administrátorů"
     },
     "/projects/{projectId}": {
-      "schema": { "$ref": "entities/Project" },
-      "description": "Zakázky a rozpočty"
+      "schema": "Project",
+      "description": "Zakázky a evidence mzdových rozpočtů"
     },
     "/time_entries/{entryId}": {
-      "schema": { "$ref": "entities/TimeEntry" },
-      "description": "Záznamy docházky a směn"
+      "schema": "TimeEntry",
+      "description": "Záznamy směn a docházky"
+    },
+    "/project_photos/{photoId}": {
+      "schema": "ProjectPhoto",
+      "description": "Fotodokumentace k zakázkám"
+    },
+    "/absences/{absenceId}": {
+      "schema": "Absence",
+      "description": "Plánované nepřítomnosti, dovolené a lékaři"
     }
   }
 }

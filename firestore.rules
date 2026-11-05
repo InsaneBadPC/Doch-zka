@@ -1,44 +1,58 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function isAdmin() {
-      return request.auth != null
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+
+    function isSignedIn() {
+      return request.auth != null;
     }
 
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isBootstrappedAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'insanebad2@gmail.com' ||
+        request.auth.token.email == 'admin@firma.cz'
+      );
+    }
+
+    // Kolekce users
     match /users/{userId} {
-      allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
-      allow create: if request.auth != null
-        && request.auth.uid == userId
-        && request.resource.data.role == 'worker';
-      allow update, delete: if isAdmin();
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (isOwner(userId) || isBootstrappedAdmin());
+      allow delete: if isBootstrappedAdmin();
     }
 
+    // Kolekce projects
     match /projects/{projectId} {
-      allow read: if request.auth != null;
-      allow create, update, delete: if isAdmin();
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
     }
 
+    // Kolekce time_entries
     match /time_entries/{entryId} {
-      allow read: if request.auth != null && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isAdmin() || (
-        request.auth != null
-        && request.resource.data.userId == request.auth.uid
-        && request.resource.data.status in ['draft', 'pending']
-      );
-      allow update: if isAdmin() || (
-        request.auth != null
-        && resource.data.userId == request.auth.uid
-        && request.resource.data.userId == request.auth.uid
-        && resource.data.status in ['draft', 'rejected']
-        && request.resource.data.status in ['draft', 'pending']
-      );
-      allow delete: if isAdmin() || (
-        request.auth != null
-        && resource.data.userId == request.auth.uid
-        && resource.data.status == 'draft'
-      );
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
+      allow delete: if isSignedIn();
+    }
+
+    // Kolekce fotodokumentace k zakázkám
+    match /project_photos/{photoId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
+      allow delete: if isSignedIn();
+    }
+
+    // Kolekce nepřítomností a kalendáře
+    match /absences/{absenceId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
+      allow delete: if isSignedIn();
     }
   }
 }

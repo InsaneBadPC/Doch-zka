@@ -11,6 +11,8 @@ export function formatKcz(amount: number, showDecimals: boolean = false): string
   }).format(rounded) + ' Kč';
 }
 
+export const formatCurrency = formatKcz;
+
 export function formatHours(hours: number): string {
   return `${hours.toFixed(2).replace('.', ',')} h`;
 }

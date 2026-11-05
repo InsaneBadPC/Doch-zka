@@ -12,6 +12,13 @@ import {
 import { ShiftFormModal } from './ShiftFormModal';
 import { StopwatchInstrument } from './StopwatchInstrument';
 import { DayTimeline } from '../common/DayTimeline';
+import { ShareAppModal } from '../common/ShareAppModal';
+import { AbsenceCalendar } from '../calendar/AbsenceCalendar';
+import { ProjectPhotosModal } from '../projects/ProjectPhotosModal';
+import { AdvancedExportModal } from '../export/AdvancedExportModal';
+import { GpsLocationModal } from '../common/GpsLocationModal';
+import { getCurrentGpsLocation } from '../../utils/geolocation';
+import { GpsLocation } from '../../types';
 import {
   Plus,
   ChevronLeft,
@@ -25,6 +32,14 @@ import {
   MessageSquare,
   Layers,
   ArrowUpRight,
+  Zap,
+  Share2,
+  Calendar,
+  Camera,
+  FileSpreadsheet,
+  Briefcase,
+  MapPin,
+  Compass,
 } from 'lucide-react';
 
 interface WorkerDashboardProps {
@@ -33,19 +48,29 @@ interface WorkerDashboardProps {
 }
 
 export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ currentUser }) => {
+  const [activeTab, setActiveTab] = useState<'shifts' | 'calendar' | 'projects'>('shifts');
   const [projects, setProjects] = useState<Project[]>([]);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [activePhotoProject, setActivePhotoProject] = useState<Project | null>(null);
   const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null);
 
-  // Stopky
+  // Stopky & GPS
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   const [isFinishingShift, setIsFinishingShift] = useState(false);
   const [finishBreakMinutes, setFinishBreakMinutes] = useState(30);
   const [finishNote, setFinishNote] = useState('');
   const [finishRate, setFinishRate] = useState(currentUser.defaultHourlyRate);
   const [currentTime, setCurrentTime] = useState(Date.now());
+
+  // GPS stavy
+  const [isLocatingStartGps, setIsLocatingStartGps] = useState(false);
+  const [finishEndLocation, setFinishEndLocation] = useState<GpsLocation | null>(null);
+  const [isLocatingEndGps, setIsLocatingEndGps] = useState(false);
+  const [gpsModalEntry, setGpsModalEntry] = useState<TimeEntry | null>(null);
 
   useEffect(() => {
     const loadData = () => {
@@ -73,10 +98,45 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ currentUser })
 
   const runningShift = entries.find((e) => e.userId === currentUser.id && e.isRunning);
 
-  const handleStartStopwatch = () => {
+  const handleStartStopwatch = async () => {
     const proj = projects.find((p) => p.id === selectedProjectId);
     if (!proj) return;
-    storageService.startLiveShift(currentUser, proj);
+
+    setIsLocatingStartGps(true);
+    // Vytvoříme směnu ihned bez zpoždění
+    const newShift = storageService.startLiveShift(currentUser, proj);
+
+    // Na pozadí získáme přesnou GPS polohu zařízení
+    try {
+      const loc = await getCurrentGpsLocation(7000);
+      if (loc) {
+        storageService.updateShiftLocation(newShift.id, loc);
+      }
+    } catch {
+      // bez chyby, směna běží dál
+    } finally {
+      setIsLocatingStartGps(false);
+    }
+  };
+
+  const handleStopStopwatchClick = async () => {
+    if (!runningShift) return;
+    setFinishRate(runningShift.hourlyRate);
+    setIsFinishingShift(true);
+    setFinishEndLocation(null);
+    setIsLocatingEndGps(true);
+
+    // Automaticky zjistíme GPS ukončení směny
+    try {
+      const loc = await getCurrentGpsLocation(7000);
+      if (loc) {
+        setFinishEndLocation(loc);
+      }
+    } catch {
+      // ok
+    } finally {
+      setIsLocatingEndGps(false);
+    }
   };
 
   const handleFinishShiftConfirm = (submitDirectly: boolean) => {
@@ -102,12 +162,14 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ currentUser })
       finishNote,
       finishRate,
       finishRate !== currentUser.defaultHourlyRate,
-      submitDirectly
+      submitDirectly,
+      finishEndLocation
     );
 
     setIsFinishingShift(false);
     setFinishNote('');
     setFinishBreakMinutes(30);
+    setFinishEndLocation(null);
   };
 
   const monthKey = toMonthKey(selectedMonth);
@@ -138,21 +200,89 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ currentUser })
 
   return (
     <div className="space-y-6">
-      {/* 1. KARTA CHRONOMETRU / STOPEK */}
-      <StopwatchInstrument
-        runningShift={runningShift}
-        projects={projects}
-        selectedProjectId={selectedProjectId}
-        onSelectProjectId={setSelectedProjectId}
-        onStart={handleStartStopwatch}
-        onStop={() => {
-          if (runningShift) {
-            setFinishRate(runningShift.hourlyRate);
-            setIsFinishingShift(true);
-          }
-        }}
-        currentTime={currentTime}
-      />
+      {/* Top Navigation Tabs & Quick Action Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#121513] border border-[#232A23] p-3 sm:p-4 rounded-[26px]">
+        {/* Navigation Tabs */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+          <button
+            type="button"
+            onClick={() => setActiveTab('shifts')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
+              activeTab === 'shifts'
+                ? 'bg-[#D4F73C] text-black shadow-md shadow-[#D4F73C]/20'
+                : 'text-slate-400 hover:text-white bg-[#171A18] border border-white/5'
+            }`}
+          >
+            <Clock className="w-3.5 h-3.5" />
+            <span>Moje docházka & Stopky</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('calendar')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
+              activeTab === 'calendar'
+                ? 'bg-[#D4F73C] text-black shadow-md shadow-[#D4F73C]/20'
+                : 'text-slate-400 hover:text-white bg-[#171A18] border border-white/5'
+            }`}
+          >
+            <Calendar className="w-3.5 h-3.5" />
+            <span>Kalendář / Žádost o volno</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('projects')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
+              activeTab === 'projects'
+                ? 'bg-[#D4F73C] text-black shadow-md shadow-[#D4F73C]/20'
+                : 'text-slate-400 hover:text-white bg-[#171A18] border border-white/5'
+            }`}
+          >
+            <Briefcase className="w-3.5 h-3.5" />
+            <span>Seznam zakázek & Fotky</span>
+          </button>
+        </div>
+
+        {/* Global Action Buttons */}
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => setIsExportModalOpen(true)}
+            className="px-3 py-2 bg-[#171A18] hover:bg-[#222723] border border-white/10 text-white font-semibold rounded-xl text-xs flex items-center gap-1.5 transition"
+            title="Exportovat osobní docházku"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5 text-[#D4F73C]" />
+            <span className="hidden sm:inline">Exportovat</span> výkaz
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsShareModalOpen(true)}
+            className="px-3 py-2 bg-[#171A18] hover:bg-[#222723] border border-white/10 text-slate-300 hover:text-white font-semibold rounded-xl text-xs flex items-center gap-1.5 transition"
+            title="Sdílet aplikaci Docházka"
+          >
+            <Share2 className="w-3.5 h-3.5" />
+            <span>Sdílet</span>
+          </button>
+        </div>
+      </div>
+
+      {/* TAB 1: SHIFTS & STOPWATCH */}
+      {activeTab === 'shifts' && (
+        <div className="space-y-6">
+          {/* 1. KARTA CHRONOMETRU / STOPEK */}
+          <StopwatchInstrument
+            runningShift={runningShift}
+            projects={projects}
+            selectedProjectId={selectedProjectId}
+            onSelectProjectId={setSelectedProjectId}
+            onStart={handleStartStopwatch}
+            onStop={handleStopStopwatchClick}
+            currentTime={currentTime}
+            isLocatingGps={isLocatingStartGps}
+            onOpenGpsModal={(entry) => setGpsModalEntry(entry)}
+          />
 
       {/* 2. ČASOVÁ OSA DNEŠNÍHO DNE */}
       <DayTimeline
@@ -161,34 +291,34 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ currentUser })
         runningEntry={runningShift}
       />
 
-      {/* 3. MĚSÍČNÍ PŘEHLED A PENĚŽENKA */}
-      <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
+      {/* 3. MĚSÍČNÍ PŘEHLED A PENĚŽENKA (FINTECH STYLE) */}
+      <div className="bg-[#121513] border border-[#232A23] rounded-[30px] p-5 sm:p-6 shadow-xl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <button
               onClick={() => changeMonth(-1)}
-              className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+              className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-[#1A221A] transition"
             >
               <ChevronLeft className="w-5 h-5" />
             </button>
-            <span className="font-bold text-sm text-slate-900 dark:text-white min-w-[140px] text-center">
+            <span className="font-extrabold text-sm text-white min-w-[140px] text-center font-mono">
               {formatMonthDisplay(selectedMonth)}
             </span>
             <button
               onClick={() => changeMonth(1)}
-              className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+              className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-[#1A221A] transition"
             >
               <ChevronRight className="w-5 h-5" />
             </button>
           </div>
 
-          {/* Dvě karty peněženky */}
-          <div className="flex items-center gap-4 sm:gap-8">
+          {/* Dvě fintech karty peněženky */}
+          <div className="flex items-center justify-between sm:justify-start gap-4 sm:gap-8 w-full sm:w-auto border-t sm:border-t-0 pt-3 sm:pt-0 border-[#1C231C]">
             <div>
-              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono">
                 Schváleno k výplatě
               </div>
-              <div className="font-mono tabular-nums text-lg font-black text-emerald-600 dark:text-emerald-400">
+              <div className="font-mono tabular-nums text-xl sm:text-2xl font-black text-[#D4F73C]">
                 {formatKcz(approvedAmount)}
                 <span className="text-xs font-normal text-slate-400 ml-1.5 font-sans">
                   ({formatHours(approvedHours)})
@@ -196,13 +326,13 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ currentUser })
               </div>
             </div>
 
-            <div className="h-8 border-r border-slate-200 dark:border-slate-800"></div>
+            <div className="h-8 border-r border-[#232A23]"></div>
 
             <div>
-              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono">
                 Čeká na schválení
               </div>
-              <div className="font-mono tabular-nums text-lg font-black text-amber-500">
+              <div className="font-mono tabular-nums text-xl sm:text-2xl font-black text-amber-400">
                 {formatKcz(pendingAmount)}
                 <span className="text-xs font-normal text-slate-400 ml-1.5 font-sans">
                   ({formatHours(pendingHours)})
@@ -216,76 +346,87 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ currentUser })
       {/* 4. SEZNAM SMĚN A RYCHLÝ ZÁPIS */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <div className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+          <div className="text-xs font-bold uppercase tracking-wider text-slate-400 font-mono">
             Odpracované směny ({userMonthEntries.length})
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              setEditingEntry(null);
-              setIsModalOpen(true);
-            }}
-            className="px-3.5 py-1.5 bg-slate-900 dark:bg-amber-500 text-white dark:text-slate-950 font-bold rounded-xl text-xs flex items-center gap-1.5 transition hover:opacity-90 shadow-sm"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Zapsat směnu ručně
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsShareModalOpen(true)}
+              className="px-3.5 py-2 bg-[#1A221A] hover:bg-[#253225] border border-[#2A372A] text-slate-300 hover:text-white font-bold rounded-2xl text-xs flex items-center gap-1.5 transition"
+              title="Sdílet aplikaci Docházka"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+              <span>Sdílet app</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEditingEntry(null);
+                setIsModalOpen(true);
+              }}
+              className="px-4 py-2 bg-[#D4F73C] hover:bg-[#c4e92a] text-[#090B0A] font-extrabold rounded-2xl text-xs flex items-center gap-1.5 transition shadow-lg shadow-[#D4F73C]/20"
+            >
+              <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+              Zapsat směnu ručně
+            </button>
+          </div>
         </div>
 
         {userMonthEntries.length === 0 ? (
-          <div className="bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 rounded-3xl p-8 sm:p-12 text-center">
-            <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 mx-auto flex items-center justify-center mb-3">
-              <Layers className="w-6 h-6" />
+          <div className="bg-[#121513] border border-[#232A23] rounded-[30px] p-8 sm:p-12 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-[#1C251C] text-[#D4F73C] mx-auto flex items-center justify-center mb-3">
+              <Layers className="w-6 h-6 stroke-[2]" />
             </div>
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-1">Žádné směny v tomto měsíci</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto mb-4">
+            <h3 className="text-sm font-bold text-white mb-1">Žádné směny v tomto měsíci</h3>
+            <p className="text-xs text-slate-400 max-w-sm mx-auto mb-4">
               V tomto měsíci nemáte zaevidovány žádné směny. Spusťte stopky výše nebo zapište směnu ručně.
             </p>
             <button
               type="button"
               onClick={() => setIsModalOpen(true)}
-              className="px-4 py-2 bg-slate-900 dark:bg-amber-500 text-white dark:text-slate-950 font-bold rounded-xl text-xs inline-flex items-center gap-1.5"
+              className="px-5 py-2.5 bg-[#D4F73C] text-[#090B0A] font-extrabold rounded-2xl text-xs inline-flex items-center gap-1.5 shadow-md shadow-[#D4F73C]/20"
             >
-              <Plus className="w-3.5 h-3.5" /> Zapsat první směnu
+              <Plus className="w-3.5 h-3.5 stroke-[2.5]" /> Zapsat první směnu
             </button>
           </div>
         ) : (
-          <div className="bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm divide-y divide-slate-100 dark:divide-slate-800">
+          <div className="bg-[#121513] border border-[#232A23] rounded-[30px] overflow-hidden shadow-xl divide-y divide-[#1C231C]">
             {userMonthEntries.map((entry) => (
               <div
                 key={entry.id}
-                className={`p-4 transition flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                className={`p-4 sm:p-5 transition flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
                   entry.status === 'rejected'
-                    ? 'bg-red-50/50 dark:bg-red-950/20'
-                    : 'hover:bg-slate-50/80 dark:hover:bg-slate-850/50'
+                    ? 'bg-[#2A1516]/40'
+                    : 'hover:bg-[#161D16]'
                 }`}
               >
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="font-bold text-sm text-slate-900 dark:text-white">
+                    <span className="font-extrabold text-sm text-white">
                       {formatDateCz(entry.date)}
                     </span>
-                    <span className="text-slate-300 dark:text-slate-600">·</span>
-                    <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    <span className="text-slate-600">·</span>
+                    <span className="text-xs font-semibold text-slate-300">
                       {entry.projectName}
                     </span>
                   </div>
 
-                  <div className="text-xs text-slate-500 dark:text-slate-400 font-mono mt-0.5">
+                  <div className="text-xs text-slate-400 font-mono mt-0.5">
                     {formatTimeFromIso(entry.startTime)} – {formatTimeFromIso(entry.endTime)}
                     {entry.breakMinutes > 0 && <span> (pauza {entry.breakMinutes} min)</span>}
                   </div>
 
                   {entry.note && (
-                    <div className="text-xs text-slate-500 dark:text-slate-400 italic mt-1">
-                      {entry.note}
+                    <div className="text-xs text-slate-400 italic mt-1 bg-[#0A0D0B] px-3 py-1.5 rounded-xl border border-[#202720] inline-block">
+                      „{entry.note}“
                     </div>
                   )}
 
                   {entry.status === 'rejected' && entry.adminComment && (
-                    <div className="mt-2 p-2.5 rounded-lg bg-red-100/70 dark:bg-red-950/60 border border-red-200 dark:border-red-900/60 text-xs text-red-900 dark:text-red-200">
+                    <div className="mt-2 p-2.5 rounded-xl bg-[#2A1516] border border-[#FF5B65]/40 text-xs text-[#FF5B65]">
                       <div className="font-bold flex items-center gap-1 mb-0.5">
-                        <MessageSquare className="w-3 h-3 text-red-600 dark:text-red-400" />
+                        <MessageSquare className="w-3 h-3 text-[#FF5B65]" />
                         Komentář šéfa k opravě:
                       </div>
                       <div>{entry.adminComment}</div>
@@ -295,33 +436,44 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ currentUser })
 
                 <div className="flex items-center justify-between sm:justify-end gap-4 shrink-0">
                   <div className="text-left sm:text-right font-mono">
-                    <div className="text-base font-extrabold text-slate-900 dark:text-white tabular-nums">
+                    <div className="text-base font-black text-white tabular-nums">
                       {formatKcz(entry.totalAmount)}
                     </div>
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                    <div className="text-[11px] text-slate-400">
                       {formatHours(entry.hoursWorked)} × {formatKcz(entry.hourlyRate)}/h
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2">
+                    {entry.startLocation && (
+                      <button
+                        type="button"
+                        onClick={() => setGpsModalEntry(entry)}
+                        className="px-2 py-1 rounded-xl bg-[#D4F73C]/10 text-[#D4F73C] border border-[#D4F73C]/30 hover:bg-[#D4F73C]/20 text-xs font-mono font-bold flex items-center gap-1 transition"
+                        title="Zobrazit GPS záznam směny"
+                      >
+                        <MapPin className="w-3 h-3" />
+                        <span>GPS</span>
+                      </button>
+                    )}
                     {entry.status === 'approved' && (
-                      <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Schváleno
+                      <span className="text-xs font-bold text-[#D4F73C] flex items-center gap-1 bg-[#1C251C] px-2.5 py-1 rounded-xl border border-[#2B392B]">
+                        <CheckCircle2 className="w-3.5 h-3.5 stroke-[2.5]" /> Schváleno
                       </span>
                     )}
                     {entry.status === 'pending' && (
-                      <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5" /> Čeká
+                      <span className="text-xs font-bold text-amber-400 flex items-center gap-1 bg-[#252012] px-2.5 py-1 rounded-xl border border-[#3E3218]">
+                        <Clock className="w-3.5 h-3.5 stroke-[2.5]" /> Čeká
                       </span>
                     )}
                     {entry.status === 'draft' && (
-                      <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                      <span className="text-xs font-semibold text-slate-400 bg-[#161A16] px-2.5 py-1 rounded-xl border border-[#232A23]">
                         Koncept
                       </span>
                     )}
                     {entry.status === 'rejected' && (
-                      <span className="text-xs font-semibold text-red-600 dark:text-red-400 flex items-center gap-1">
-                        <AlertCircle className="w-3.5 h-3.5" /> Vráceno
+                      <span className="text-xs font-bold text-[#FF5B65] flex items-center gap-1 bg-[#2A1516] px-2.5 py-1 rounded-xl border border-[#3A1E20]">
+                        <AlertCircle className="w-3.5 h-3.5 stroke-[2.5]" /> Vráceno
                       </span>
                     )}
 
@@ -333,7 +485,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ currentUser })
                             onClick={() => {
                               if (confirm('Smazat koncept?')) storageService.deleteShift(entry.id);
                             }}
-                            className="p-1.5 text-slate-400 hover:text-red-500 transition"
+                            className="p-1.5 text-slate-500 hover:text-[#FF5B65] transition"
                             title="Smazat"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -345,7 +497,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ currentUser })
                             setEditingEntry(entry);
                             setIsModalOpen(true);
                           }}
-                          className="p-1.5 text-slate-500 hover:text-slate-900 dark:hover:text-white transition"
+                          className="p-1.5 text-slate-400 hover:text-white transition"
                           title="Upravit"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
@@ -353,7 +505,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ currentUser })
                         <button
                           type="button"
                           onClick={() => storageService.submitDraftForApproval(entry.id)}
-                          className="px-2.5 py-1 text-xs font-bold bg-amber-500 text-slate-950 rounded-lg hover:bg-amber-400 transition"
+                          className="px-3 py-1 text-xs font-bold bg-[#D4F73C] text-[#090B0A] rounded-xl hover:bg-[#c4e92a] transition shadow-md shadow-[#D4F73C]/20"
                         >
                           Odeslat
                         </button>
@@ -366,6 +518,114 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ currentUser })
           </div>
         )}
       </div>
+    </div>
+  )}
+
+      {/* TAB 2: KALENDÁŘ ABSENCÍ & ŽÁDOST O VOLNO / LÉKAŘE */}
+      {activeTab === 'calendar' && (
+        <AbsenceCalendar currentUser={currentUser} allUsers={[currentUser]} />
+      )}
+
+      {/* TAB 3: SEZNAM ZAKÁZEK A FOTODOKUMENTACE */}
+      {activeTab === 'projects' && (
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#121513] border border-[#232A23] rounded-[26px] p-5 shadow-xl">
+            <div>
+              <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                <Briefcase className="w-4 h-4 text-[#D4F73C]" /> Seznam všech vytvořených zakázek ({projects.length})
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Přehled firemních zakázek, váš odpracovaný čas a fotodokumentace
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {projects.map((proj) => {
+              // Worker privacy: worker only calculates their own hours for this project
+              const myProjEntries = entries.filter((e) => e.userId === currentUser.id && e.projectId === proj.id);
+              const myHours = myProjEntries.reduce((sum, e) => sum + (e.hoursWorked || 0), 0);
+              const myEarnings = myProjEntries.reduce((sum, e) => sum + (e.totalAmount || 0), 0);
+
+              return (
+                <div
+                  key={proj.id}
+                  className="bg-[#121513] border border-[#232A23] rounded-[24px] p-5 space-y-4 shadow-xl flex flex-col justify-between hover:border-white/20 transition-all"
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <h4 className="font-extrabold text-white text-base">{proj.name}</h4>
+                        <div className="text-xs text-slate-400 mt-0.5">Klient: {proj.client}</div>
+                      </div>
+                      <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider ${
+                        proj.status === 'open'
+                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                          : 'bg-white/5 text-white/40'
+                      }`}>
+                        {proj.status === 'open' ? 'Aktivní' : 'Uzavřeno'}
+                      </span>
+                    </div>
+
+                    <div className="p-3 bg-[#0A0D0B] rounded-xl border border-[#202720] space-y-1">
+                      <div className="text-[11px] text-slate-400">Vaše odpracované hodiny:</div>
+                      <div className="flex items-center justify-between font-mono">
+                        <span className="text-sm font-bold text-white">{formatHours(myHours)}</span>
+                        <span className="text-xs font-semibold text-[#D4F73C]">{formatKcz(myEarnings)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Fotodokumentace náhled přímo na kartě zakázky pro pracovníka */}
+                  {(() => {
+                    const projPhotos = storageService.getProjectPhotos(proj.id);
+                    return (
+                      <div className="pt-2 border-t border-[#1C231C] space-y-2">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-semibold text-slate-300 flex items-center gap-1.5">
+                            <Camera className="w-3.5 h-3.5 text-[#D4F73C]" />
+                            Fotodokumentace
+                          </span>
+                          <span className="text-[11px] font-mono text-slate-400">
+                            {projPhotos.length === 0 ? 'Bez fotek' : `${projPhotos.length} fotek`}
+                          </span>
+                        </div>
+
+                        {projPhotos.length > 0 ? (
+                          <div className="grid grid-cols-3 gap-2">
+                            {projPhotos.slice(0, 3).map((ph) => (
+                              <div
+                                key={ph.id}
+                                onClick={() => setActivePhotoProject(proj)}
+                                className="aspect-video rounded-xl overflow-hidden bg-black/40 border border-white/5 cursor-pointer hover:border-[#D4F73C] transition group relative"
+                              >
+                                <img src={ph.photoData} alt={ph.caption} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="p-2 rounded-xl bg-[#0A0D0B] border border-white/5 text-[11px] text-slate-500 italic text-center">
+                            Žádné fotky. Můžete přidat fotku z práce.
+                          </div>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => setActivePhotoProject(proj)}
+                          className="w-full py-2 px-3 bg-[#171A18] hover:bg-[#D4F73C] text-slate-200 hover:text-black font-semibold text-xs rounded-xl border border-white/10 transition-colors flex items-center justify-center gap-2"
+                        >
+                          <Camera className="w-4 h-4" />
+                          <span>{projPhotos.length > 0 ? `Galerie & nahrát foto (${projPhotos.length})` : 'Vyfotit / Nahrát fotku'}</span>
+                        </button>
+                      </div>
+                    );
+                  })()}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Modal pro ruční zápis / editaci */}
       {isModalOpen && (
@@ -383,23 +643,23 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ currentUser })
 
       {/* Dialog dokončení směny ze stopek */}
       {isFinishingShift && runningShift && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
-          <div className="w-full max-w-md bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-2xl space-y-4">
-            <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <Clock className="w-4 h-4 text-amber-500" /> Ukončení probíhající směny
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="w-full max-w-md bg-[#121513] border border-[#232A23] rounded-[30px] p-6 shadow-2xl space-y-4">
+            <h3 className="text-base font-extrabold text-white flex items-center gap-2">
+              <Clock className="w-5 h-5 text-[#D4F73C]" /> Ukončení probíhající směny
             </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Zakázka: <strong className="text-slate-900 dark:text-white">{runningShift.projectName}</strong>
+            <p className="text-xs text-slate-400">
+              Zakázka: <strong className="text-white">{runningShift.projectName}</strong>
             </p>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
                 Pauza na oběd a odpočinek
               </label>
               <select
                 value={finishBreakMinutes}
                 onChange={(e) => setFinishBreakMinutes(Number(e.target.value))}
-                className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-[#090d16] border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white text-sm"
+                className="w-full px-4 py-3 bg-[#0A0D0B] border border-[#232A23] focus:border-[#D4F73C] rounded-2xl text-white text-sm"
               >
                 <option value={0}>0 minut (bez pauzy)</option>
                 <option value={15}>15 minut</option>
@@ -411,20 +671,20 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ currentUser })
 
             {currentUser.allowCustomRate && (
               <div>
-                <label className="block text-xs font-semibold text-amber-600 dark:text-amber-400 mb-1">
+                <label className="block text-xs font-semibold text-[#D4F73C] mb-1.5">
                   Hodinová sazba pro tuto směnu (Kč/h)
                 </label>
                 <input
                   type="number"
                   value={finishRate}
                   onChange={(e) => setFinishRate(Number(e.target.value))}
-                  className="w-full px-3.5 py-2 bg-slate-50 dark:bg-[#090d16] border border-amber-400 dark:border-amber-500/40 rounded-xl text-slate-900 dark:text-white text-sm font-mono"
+                  className="w-full px-4 py-3 bg-[#0A0D0B] border border-[#D4F73C]/40 focus:border-[#D4F73C] rounded-2xl text-white text-sm font-mono"
                 />
               </div>
             )}
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
                 Popis vykonané práce (poznámka)
               </label>
               <textarea
@@ -432,35 +692,106 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ currentUser })
                 value={finishNote}
                 onChange={(e) => setFinishNote(e.target.value)}
                 placeholder="Zadejte stručný popis vykonaných činností..."
-                className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-[#090d16] border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white text-sm placeholder-slate-400"
+                className="w-full px-4 py-3 bg-[#0A0D0B] border border-[#232A23] focus:border-[#D4F73C] rounded-2xl text-white text-sm placeholder-slate-500"
               />
             </div>
 
-            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-200 dark:border-slate-800">
+            {/* GPS souřadnice směny */}
+            <div className="p-3.5 rounded-2xl bg-[#0A0D0B] border border-[#232A23] space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-white flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-[#D4F73C]" />
+                  Automatický GPS záznam
+                </span>
+                <span className="text-[10px] text-slate-400 font-mono">Ověření polohy</span>
+              </div>
+
+              {runningShift.startLocation && (
+                <div className="text-[11px] text-slate-300 font-mono flex items-center justify-between gap-2">
+                  <span className="text-slate-400">Zahájení:</span>
+                  <span className="text-[#D4F73C] font-semibold truncate">
+                    {runningShift.startLocation.latitude.toFixed(4)}, {runningShift.startLocation.longitude.toFixed(4)}
+                    {runningShift.startLocation.address ? ` (${runningShift.startLocation.address})` : ''}
+                  </span>
+                </div>
+              )}
+
+              <div className="text-[11px] text-slate-300 font-mono flex items-center justify-between gap-2">
+                <span className="text-slate-400">Ukončení:</span>
+                {isLocatingEndGps ? (
+                  <span className="text-amber-400 animate-pulse flex items-center gap-1">
+                    <Compass className="w-3 h-3 animate-spin" /> Zjišťuji GPS ukončení...
+                  </span>
+                ) : finishEndLocation ? (
+                  <span className="text-emerald-400 font-semibold truncate">
+                    {finishEndLocation.latitude.toFixed(4)}, {finishEndLocation.longitude.toFixed(4)}
+                    {finishEndLocation.address ? ` (${finishEndLocation.address})` : ''}
+                  </span>
+                ) : (
+                  <span className="text-slate-500 italic">Nepodařilo se zjistit</span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-[#1E251E]">
               <button
                 type="button"
                 onClick={() => setIsFinishingShift(false)}
-                className="px-3.5 py-2 text-xs font-semibold text-slate-500 hover:text-slate-900 dark:hover:text-white"
+                className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white"
               >
                 Zpět ke stopkám
               </button>
               <button
                 type="button"
                 onClick={() => handleFinishShiftConfirm(false)}
-                className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold"
+                className="px-4 py-2.5 bg-[#1A221A] hover:bg-[#253225] text-slate-200 rounded-xl text-xs font-bold border border-[#2A372A]"
               >
-                Uložit návrh
+                Uložit koncept
               </button>
               <button
                 type="button"
                 onClick={() => handleFinishShiftConfirm(true)}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-emerald-600/20"
+                className="px-5 py-2.5 bg-[#D4F73C] hover:bg-[#c4e92a] text-[#090B0A] rounded-xl text-xs font-extrabold flex items-center gap-1.5 shadow-md shadow-[#D4F73C]/20"
               >
                 <Send className="w-3.5 h-3.5" /> Odeslat ke schválení
               </button>
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal pro sdílení aplikace a APK */}
+      <ShareAppModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+      />
+
+      {/* Modal fotodokumentace zakázky */}
+      {activePhotoProject && (
+        <ProjectPhotosModal
+          project={activePhotoProject}
+          currentUser={currentUser}
+          onClose={() => setActivePhotoProject(null)}
+        />
+      )}
+
+      {/* Modal pro zobrazení GPS polohy */}
+      {gpsModalEntry && (
+        <GpsLocationModal
+          entry={gpsModalEntry}
+          onClose={() => setGpsModalEntry(null)}
+        />
+      )}
+
+      {/* Modal pro pokročilý export */}
+      {isExportModalOpen && (
+        <AdvancedExportModal
+          currentUser={currentUser}
+          allUsers={[currentUser]}
+          projects={projects}
+          entries={entries}
+          onClose={() => setIsExportModalOpen(false)}
+        />
       )}
     </div>
   );

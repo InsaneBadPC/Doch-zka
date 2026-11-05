@@ -1,11 +1,13 @@
-import { AppUser, Project, ProjectStatus, TimeEntry } from '../types';
+import { Absence, AbsenceStatus, AppUser, Project, ProjectPhoto, ProjectStatus, TimeEntry } from '../types';
+import { firestoreSyncService } from './firestoreService';
 
 const STORAGE_KEY_USERS = 'dochazka_users_v2';
 const STORAGE_KEY_PROJECTS = 'dochazka_projects_v2';
 const STORAGE_KEY_ENTRIES = 'dochazka_entries_v2';
 const STORAGE_KEY_CURRENT_USER = 'dochazka_auth_user_v2';
+const STORAGE_KEY_PHOTOS = 'dochazka_photos_v2';
+const STORAGE_KEY_ABSENCES = 'dochazka_absences_v2';
 
-// Reálný výchozí administrátorský účet vlastníka aplikace (založen na reálném e-mailu uživatele)
 const OWNER_EMAIL = 'insanebad2@gmail.com';
 const OWNER_NAME = 'Správce docházky';
 
@@ -24,18 +26,26 @@ const INITIAL_USERS: AppUser[] = [
 const INITIAL_PROJECTS: Project[] = [
   {
     id: 'proj-1',
-    name: 'Hlavní zakázka A',
-    client: 'Klient 1',
+    name: 'Rekonstrukce areálu A',
+    client: 'Stavba Plus s.r.o.',
     status: 'open',
-    budgetLimitKcz: 100000,
+    budgetLimitKcz: 120000,
     createdAt: new Date().toISOString(),
   },
   {
     id: 'proj-2',
-    name: 'Servis a údržba',
-    client: 'Klient 2',
+    name: 'Elektroinstalace a FVE',
+    client: 'Energo Solar a.s.',
     status: 'open',
-    budgetLimitKcz: 50000,
+    budgetLimitKcz: 80000,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'proj-3',
+    name: 'Servisní údržba',
+    client: 'Facility Management CZ',
+    status: 'open',
+    budgetLimitKcz: 45000,
     createdAt: new Date().toISOString(),
   },
 ];
@@ -48,14 +58,6 @@ class StorageService {
   }
 
   private initStorage() {
-    // Migrace / vyčištění starých vymyšlených dat z v1
-    if (localStorage.getItem('dochazka_users_v1')) {
-      localStorage.removeItem('dochazka_users_v1');
-      localStorage.removeItem('dochazka_projects_v1');
-      localStorage.removeItem('dochazka_entries_v1');
-      localStorage.removeItem('dochazka_auth_user_v1');
-    }
-
     if (!localStorage.getItem(STORAGE_KEY_USERS)) {
       localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(INITIAL_USERS));
     }
@@ -63,11 +65,16 @@ class StorageService {
       localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify(INITIAL_PROJECTS));
     }
     if (!localStorage.getItem(STORAGE_KEY_ENTRIES)) {
-      // Čistá databáze bez vymyšlených záznamů
       localStorage.setItem(STORAGE_KEY_ENTRIES, JSON.stringify([]));
     }
     if (!localStorage.getItem(STORAGE_KEY_CURRENT_USER)) {
       localStorage.setItem(STORAGE_KEY_CURRENT_USER, JSON.stringify(INITIAL_USERS[0]));
+    }
+    if (!localStorage.getItem(STORAGE_KEY_PHOTOS)) {
+      localStorage.setItem(STORAGE_KEY_PHOTOS, JSON.stringify([]));
+    }
+    if (!localStorage.getItem(STORAGE_KEY_ABSENCES)) {
+      localStorage.setItem(STORAGE_KEY_ABSENCES, JSON.stringify([]));
     }
   }
 
@@ -123,7 +130,6 @@ class StorageService {
       throw new Error('Uživatel s tímto e-mailem již v systému existuje.');
     }
 
-    // Pokud se registruje vlastník (insanebad2@gmail.com), je automaticky admin
     const isOwner = cleanEmail === OWNER_EMAIL.toLowerCase();
 
     const newUser: AppUser = {
@@ -251,7 +257,6 @@ class StorageService {
     }
   }
 
-  // Kontrola kolizí směn
   checkCollision(userId: string, newStart: Date, newEnd: Date, excludeId?: string): boolean {
     const entries = this.getTimeEntries().filter((e) => e.userId === userId && e.id !== excludeId);
     for (const entry of entries) {
@@ -267,7 +272,7 @@ class StorageService {
     return false;
   }
 
-  startLiveShift(user: AppUser, project: Project): TimeEntry {
+  startLiveShift(user: AppUser, project: Project, startLocation?: GpsLocation | null): TimeEntry {
     const now = new Date();
     const newEntry: TimeEntry = {
       id: 'ent-' + Date.now(),
@@ -289,13 +294,35 @@ class StorageService {
       adminComment: '',
       approvedBy: null,
       approvedAt: null,
+      startLocation: startLocation || null,
+      endLocation: null,
     };
 
     const entries = this.getTimeEntries();
     entries.unshift(newEntry);
     localStorage.setItem(STORAGE_KEY_ENTRIES, JSON.stringify(entries));
     this.notify();
+    try {
+      firestoreSyncService.saveTimeEntryToFirestore(newEntry);
+    } catch {
+      // offline fallback
+    }
     return newEntry;
+  }
+
+  updateShiftLocation(entryId: string, startLocation?: GpsLocation | null, endLocation?: GpsLocation | null) {
+    const entries = this.getTimeEntries();
+    const entry = entries.find((e) => e.id === entryId);
+    if (!entry) return;
+    if (startLocation !== undefined) entry.startLocation = startLocation;
+    if (endLocation !== undefined) entry.endLocation = endLocation;
+    localStorage.setItem(STORAGE_KEY_ENTRIES, JSON.stringify(entries));
+    this.notify();
+    try {
+      firestoreSyncService.saveTimeEntryToFirestore(entry);
+    } catch {
+      // offline fallback
+    }
   }
 
   stopLiveShift(
@@ -305,7 +332,8 @@ class StorageService {
     note: string,
     hourlyRate: number,
     isCustomRate: boolean,
-    submitDirectly: boolean
+    submitDirectly: boolean,
+    endLocation?: GpsLocation | null
   ) {
     const entries = this.getTimeEntries();
     const entry = entries.find((e) => e.id === entryId);
@@ -326,9 +354,17 @@ class StorageService {
     entry.note = note.trim();
     entry.status = submitDirectly ? 'pending' : 'draft';
     entry.isRunning = false;
+    if (endLocation) {
+      entry.endLocation = endLocation;
+    }
 
     localStorage.setItem(STORAGE_KEY_ENTRIES, JSON.stringify(entries));
     this.notify();
+    try {
+      firestoreSyncService.saveTimeEntryToFirestore(entry);
+    } catch {
+      // offline fallback
+    }
   }
 
   createManualShift(entry: Omit<TimeEntry, 'id'>): TimeEntry {
@@ -338,6 +374,15 @@ class StorageService {
     };
     const entries = this.getTimeEntries();
     entries.unshift(newEntry);
+    localStorage.setItem(STORAGE_KEY_ENTRIES, JSON.stringify(entries));
+    this.notify();
+    try {
+      firestoreSyncService.saveTimeEntryToFirestore(newEntry);
+    } catch {
+      // offline fallback
+    }
+    return newEntry;
+  }
     localStorage.setItem(STORAGE_KEY_ENTRIES, JSON.stringify(entries));
     this.notify();
     return newEntry;
@@ -412,11 +457,186 @@ class StorageService {
     this.notify();
   }
 
-  resetWorkspace() {
-    localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(INITIAL_USERS));
-    localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify(INITIAL_PROJECTS));
-    localStorage.setItem(STORAGE_KEY_ENTRIES, JSON.stringify([]));
-    localStorage.setItem(STORAGE_KEY_CURRENT_USER, JSON.stringify(INITIAL_USERS[0]));
+  // Pomocná funkce pro šéfa k vygenerování reprezentativních dat pro grafy a rozpočty
+  seedChartAnalyticsData() {
+    const users = this.getUsers();
+    const projects = this.getProjects();
+    if (projects.length === 0) return;
+
+    const sampleEntries: TimeEntry[] = [];
+    const today = new Date();
+
+    // Vytvoříme 10 směn v průběhu posledních 7 dnů
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(today.getDate() - i);
+      const dateStr = d.toISOString().substring(0, 10);
+      const proj = projects[i % projects.length];
+      const hours = 6.5 + (i % 3) * 1.5;
+      const rate = 300;
+      const total = Math.round(hours * rate);
+
+      sampleEntries.push({
+        id: 'seed-ent-' + i,
+        userId: users[0]?.id || 'user-owner',
+        userName: users[0]?.name || 'Pracovník',
+        projectId: proj.id,
+        projectName: proj.name,
+        date: dateStr,
+        startTime: `${dateStr}T07:30:00`,
+        endTime: `${dateStr}T15:30:00`,
+        breakMinutes: 30,
+        hoursWorked: hours,
+        hourlyRate: rate,
+        isCustomRate: false,
+        totalAmount: total,
+        note: `Práce na zakázce ${proj.name}`,
+        status: i === 0 ? 'pending' : 'approved',
+        isRunning: false,
+        adminComment: '',
+        approvedBy: i === 0 ? null : 'user-owner',
+        approvedAt: i === 0 ? null : new Date().toISOString(),
+      });
+    }
+
+    localStorage.setItem(STORAGE_KEY_ENTRIES, JSON.stringify(sampleEntries));
+    this.notify();
+  }
+
+  // --- Project Photos (Spark Free Plan compliant, compressed Base64) ---
+  getProjectPhotos(projectId?: string): ProjectPhoto[] {
+    const raw = localStorage.getItem(STORAGE_KEY_PHOTOS);
+    if (!raw) return [];
+    try {
+      const photos: ProjectPhoto[] = JSON.parse(raw);
+      if (projectId) {
+        return photos.filter((p) => p.projectId === projectId);
+      }
+      return photos;
+    } catch {
+      return [];
+    }
+  }
+
+  addProjectPhoto(data: Omit<ProjectPhoto, 'id' | 'createdAt'>): ProjectPhoto {
+    const photos = this.getProjectPhotos();
+    const newPhoto: ProjectPhoto = {
+      ...data,
+      id: 'photo-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+      createdAt: new Date().toISOString(),
+    };
+    photos.unshift(newPhoto);
+    localStorage.setItem(STORAGE_KEY_PHOTOS, JSON.stringify(photos));
+    firestoreSyncService.saveProjectPhotoToFirestore(newPhoto);
+    this.notify();
+    return newPhoto;
+  }
+
+  deleteProjectPhoto(photoId: string) {
+    const photos = this.getProjectPhotos().filter((p) => p.id !== photoId);
+    localStorage.setItem(STORAGE_KEY_PHOTOS, JSON.stringify(photos));
+    firestoreSyncService.deleteProjectPhotoFromFirestore(photoId);
+    this.notify();
+  }
+
+  // Komprese obrázku přes HTML5 Canvas do JPEG s max rozměrem 800px a kvalitou 0.7 (~25-45 KB)
+  async compressImage(file: File, maxWidth = 800, quality = 0.7): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('Chyba při čtení obrázku.'));
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onerror = () => reject(new Error('Chyba při načítání obrázku.'));
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            reject(new Error('Nelze vytvořit 2D canvas kontext'));
+            return;
+          }
+
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+          resolve(compressedDataUrl);
+        };
+        img.src = e.target?.result as string;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // --- Absences / Kalendář absencí a žádostí o volno ---
+  getAbsences(userId?: string): Absence[] {
+    const raw = localStorage.getItem(STORAGE_KEY_ABSENCES);
+    if (!raw) return [];
+    try {
+      const absences: Absence[] = JSON.parse(raw);
+      if (userId) {
+        return absences.filter((a) => a.userId === userId);
+      }
+      return absences;
+    } catch {
+      return [];
+    }
+  }
+
+  createAbsence(
+    data: Omit<Absence, 'id' | 'createdAt' | 'status' | 'approvedBy'>,
+    initialStatus: AbsenceStatus = 'pending'
+  ): Absence {
+    const absences = this.getAbsences();
+    const newAbsence: Absence = {
+      ...data,
+      id: 'abs-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+      status: initialStatus,
+      createdAt: new Date().toISOString(),
+      approvedBy: initialStatus === 'approved' ? 'admin' : null,
+    };
+    absences.unshift(newAbsence);
+    localStorage.setItem(STORAGE_KEY_ABSENCES, JSON.stringify(absences));
+    firestoreSyncService.saveAbsenceToFirestore(newAbsence);
+    this.notify();
+    return newAbsence;
+  }
+
+  approveAbsence(absenceId: string, adminId: string) {
+    const absences = this.getAbsences();
+    const target = absences.find((a) => a.id === absenceId);
+    if (target) {
+      target.status = 'approved';
+      target.approvedBy = adminId;
+      localStorage.setItem(STORAGE_KEY_ABSENCES, JSON.stringify(absences));
+      firestoreSyncService.saveAbsenceToFirestore(target);
+      this.notify();
+    }
+  }
+
+  rejectAbsence(absenceId: string) {
+    const absences = this.getAbsences();
+    const target = absences.find((a) => a.id === absenceId);
+    if (target) {
+      target.status = 'rejected';
+      localStorage.setItem(STORAGE_KEY_ABSENCES, JSON.stringify(absences));
+      firestoreSyncService.saveAbsenceToFirestore(target);
+      this.notify();
+    }
+  }
+
+  deleteAbsence(absenceId: string) {
+    const absences = this.getAbsences().filter((a) => a.id !== absenceId);
+    localStorage.setItem(STORAGE_KEY_ABSENCES, JSON.stringify(absences));
+    firestoreSyncService.deleteAbsenceFromFirestore(absenceId);
     this.notify();
   }
 }

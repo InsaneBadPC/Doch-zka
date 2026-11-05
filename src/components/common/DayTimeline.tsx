@@ -25,22 +25,26 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
   const nowPercent = Math.max(0, Math.min(100, (currentMinutesFromStart / (totalHours * 60)) * 100));
 
   return (
-    <div className="w-full bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
+    <div className="w-full bg-[#121513] border border-[#232A23] rounded-[28px] p-5 shadow-xl">
       <div className="flex items-center justify-between text-xs mb-3">
-        <span className="font-semibold text-slate-700 dark:text-slate-300">
+        <span className="font-bold text-white flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-[#D4F73C]"></span>
           Časová osa dne (06:00 – 21:00)
         </span>
-        <span className="text-slate-400 font-mono">
-          Dnes odpracováno: {todayEntries.length + (runningEntry ? 1 : 0)} směny
+        <span className="text-slate-400 font-mono text-[11px]">
+          Dnes odpracováno:{' '}
+          <strong className="text-white">
+            {todayEntries.length + (runningEntry ? 1 : 0)} {todayEntries.length === 1 ? 'směna' : 'směn'}
+          </strong>
         </span>
       </div>
 
       {/* Vizuální pás časové osy */}
-      <div className="relative h-10 bg-slate-100 dark:bg-[#090d16] rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800">
+      <div className="relative h-11 bg-[#0A0D0B] rounded-2xl overflow-hidden border border-[#202720]">
         {/* Hodinové dělící rysky */}
-        <div className="absolute inset-0 flex justify-between pointer-events-none opacity-25 dark:opacity-20">
+        <div className="absolute inset-0 flex justify-between pointer-events-none opacity-20">
           {Array.from({ length: totalHours + 1 }).map((_, i) => (
-            <div key={i} className="h-full border-r border-slate-400 dark:border-slate-600"></div>
+            <div key={i} className="h-full border-r border-slate-600"></div>
           ))}
         </div>
 
@@ -59,7 +63,7 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
               <div
                 key={e.id}
                 style={{ left: `${left}%`, width: `${width}%` }}
-                className="absolute top-1 bottom-1 bg-amber-500/80 hover:bg-amber-400 dark:bg-amber-500/90 text-slate-950 rounded-lg px-2 flex items-center justify-between text-[10px] font-bold overflow-hidden cursor-default transition shadow-xs"
+                className="absolute top-1.5 bottom-1.5 bg-[#D4F73C]/80 hover:bg-[#D4F73C] text-[#090B0A] rounded-xl px-2 flex items-center justify-between text-[10px] font-extrabold overflow-hidden cursor-default transition shadow-md"
                 title={`${e.projectName}: ${formatTimeFromIso(e.startTime)} - ${formatTimeFromIso(e.endTime)} (${e.hoursWorked} h)`}
               >
                 <span className="truncate">{e.projectName}</span>
@@ -78,16 +82,16 @@ export const DayTimeline: React.FC<DayTimelineProps> = ({
         {currentMinutesFromStart >= 0 && currentMinutesFromStart <= totalHours * 60 && (
           <div
             style={{ left: `${nowPercent}%` }}
-            className="absolute top-0 bottom-0 w-0.5 bg-red-500 shadow-sm z-10 pointer-events-none"
+            className="absolute top-0 bottom-0 w-0.5 bg-[#FF5B65] shadow-lg z-10 pointer-events-none"
             title="Aktuální čas"
           >
-            <div className="w-1.5 h-1.5 -ml-0.5 rounded-full bg-red-500"></div>
+            <div className="w-2 h-2 -ml-[3px] rounded-full bg-[#FF5B65]"></div>
           </div>
         )}
       </div>
 
       {/* Hodinové popisky pod osou */}
-      <div className="flex justify-between text-[10px] font-mono text-slate-400 mt-1.5 px-0.5">
+      <div className="flex justify-between text-[10px] font-mono text-slate-500 mt-2 px-1">
         <span>06:00</span>
         <span>09:00</span>
         <span>12:00</span>
@@ -113,11 +117,11 @@ function runningShiftOnTimeline(running?: TimeEntry, startHour = 6, totalHours =
     return (
       <div
         style={{ left: `${left}%`, width: `${width}%` }}
-        className="absolute top-1 bottom-1 bg-emerald-500/90 text-slate-950 rounded-lg px-2 flex items-center justify-between text-[10px] font-bold overflow-hidden animate-pulse shadow-md"
+        className="absolute top-1.5 bottom-1.5 bg-[#D4F73C] text-[#090B0A] rounded-xl px-2 flex items-center justify-between text-[10px] font-black overflow-hidden animate-pulse shadow-lg shadow-[#D4F73C]/30"
         title={`Běžící směna: ${running.projectName}`}
       >
         <span className="truncate">{running.projectName}</span>
-        <span className="font-mono tabular-nums shrink-0 ml-1">Právě probíhá</span>
+        <span className="font-mono tabular-nums shrink-0 ml-1">Probíhá...</span>
       </div>
     );
   } catch {

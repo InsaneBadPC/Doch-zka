@@ -1,0 +1,97 @@
+name: Sestavení Web App (GitHub Pages) a Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  # 1. Sestavení a nasazení webové aplikace na GitHub Pages
+  build-and-deploy-web:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout repozitáře
+        uses: actions/checkout@v4
+
+      - name: Nastavení Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Instalace npm závislostí
+        run: npm install
+
+      - name: Sestavení produkční webové aplikace (Vite)
+        run: npm run build
+
+      - name: Nastavení GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Nahrání artefaktu pro GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './dist'
+
+      - name: Publikace na GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  # 2. Sestavení nativního Android APK instalačního balíčku
+  build-android-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repozitáře
+        uses: actions/checkout@v4
+
+      - name: Nastavení Java JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Nastavení Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Stažení Flutter balíčků
+        run: flutter pub get
+
+      - name: Sestavení Release APK balíčku
+        run: flutter build apk --release
+
+      - name: Uložení APK jako stahovatelný artefakt
+        uses: actions/upload-artifact@v4
+        with:
+          name: dochazka-app-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 30
+
+      - name: Vytvoření / Aktualizace GitHub Release s nejnovějším APK
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        with:
+          tag_name: latest
+          name: "Nejnovější sestavení (Web & Android APK)"
+          body: |
+            Automatické sestavení aplikace **Firemní Docházka a Evidence Zakázek**.
+            
+            - 📱 **Android APK**: Stáhněte soubor `app-release.apk` níže a nainstalujte do mobilu.
+            - 🌐 **Web & iOS PWA**: Běží online přes GitHub Pages.
+          files: build/app/outputs/flutter-apk/app-release.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

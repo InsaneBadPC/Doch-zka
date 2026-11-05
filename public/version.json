@@ -1,0 +1,7 @@
+{
+  "version": "1.0.1",
+  "buildNumber": 101,
+  "buildTime": "2026-11-04T23:10:00.000Z",
+  "releaseNotes": "Nové automatické verzování, detekce aktualizací a stažení přímo v aplikaci.",
+  "minSupportedVersion": "1.0.0"
+}
