@@ -15,12 +15,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # 1. Sestavení a nasazení webové aplikace na GitHub Pages
-  build-and-deploy-web:
+  # 1. Sestavení webové aplikace (Vite)
+  build-web:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout repozitáře
         uses: actions/checkout@v4
@@ -45,11 +42,19 @@ jobs:
         with:
           path: './dist'
 
+  # 2. Publikace na GitHub Pages
+  deploy-web:
+    runs-on: ubuntu-latest
+    needs: build-web
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - name: Publikace na GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
 
-  # 2. Sestavení nativního Android APK instalačního balíčku
+  # 3. Sestavení nativního Android APK instalačního balíčku
   build-android-apk:
     runs-on: ubuntu-latest
     steps:
