@@ -63,7 +63,9 @@ export const AuthScreen: React.FC = () => {
     }
   };
 
-  const handleWorkerSubmit = (e: React.FormEvent) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleWorkerSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -78,29 +80,54 @@ export const AuthScreen: React.FC = () => {
       return;
     }
 
-    if (isRegister) {
-      if (!name.trim()) {
-        setError('Zadejte své celé jméno a příjmení.');
-        return;
-      }
-      try {
-        storageService.register(name, cleanEmail, 'worker', hourlyRate, password);
-      } catch (err: any) {
-        setError(err.message || 'Chyba při registraci.');
-      }
-    } else {
-      try {
-        const logged = storageService.login(cleanEmail, password);
-        if (!logged) {
-          setError('Zaměstnanec s tímto e-mailem nebyl nalezen. Zaregistrujte se prosím.');
+    setIsSubmitting(true);
+    try {
+      if (isRegister) {
+        if (!name.trim()) {
+          setError('Zadejte své celé jméno a příjmení.');
+          setIsSubmitting(false);
+          return;
         }
-      } catch (err: any) {
-        setError(err.message || 'Nesprávné přihlašovací údaje.');
+
+        let fbUser: any = null;
+        try {
+          fbUser = await firebaseAuthService.registerWithEmail(name, cleanEmail, password, hourlyRate);
+        } catch (fbErr: any) {
+          console.warn('Firebase register note (offline fallback):', fbErr.message);
+        }
+
+        try {
+          storageService.register(name, cleanEmail, 'worker', hourlyRate, password);
+        } catch (localErr: any) {
+          if (!fbUser) throw localErr;
+        }
+
+        if (fbUser) {
+          storageService.setCurrentUser(fbUser);
+        }
+      } else {
+        let fbUser: any = null;
+        try {
+          fbUser = await firebaseAuthService.signInWithEmail(cleanEmail, password);
+        } catch (fbErr: any) {
+          console.warn('Firebase login note (offline fallback):', fbErr.message);
+        }
+
+        const localUser = storageService.login(cleanEmail, password);
+        if (fbUser) {
+          storageService.setCurrentUser(fbUser);
+        } else if (!localUser) {
+          setError('Zaměstnanec s tímto e-mailem nebyl nalezen nebo heslo nesouhlasí.');
+        }
       }
+    } catch (err: any) {
+      setError(err.message || 'Chyba při přihlašování.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const handleBossSubmit = (e: React.FormEvent) => {
+  const handleBossSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -109,10 +136,18 @@ export const AuthScreen: React.FC = () => {
       return;
     }
 
+    setIsSubmitting(true);
     try {
+      try {
+        await firebaseAuthService.signInBoss(bossPassword);
+      } catch (fbErr: any) {
+        console.warn('Firebase boss login note (offline fallback):', fbErr.message);
+      }
       storageService.loginBoss(bossPassword, bossName);
     } catch (err: any) {
       setError(err.message || 'Nesprávné heslo pro přístup správce.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -328,9 +363,10 @@ export const AuthScreen: React.FC = () => {
 
                 <button
                   type="submit"
-                  className="w-full mt-2 min-h-[48px] py-3 bg-[#D4F73C] hover:bg-[#c6eb2d] active:scale-[0.99] text-[#090B0A] font-extrabold rounded-2xl transition flex items-center justify-center gap-2 shadow-lg shadow-[#D4F73C]/20 text-xs sm:text-sm cursor-pointer"
+                  disabled={isSubmitting}
+                  className="w-full mt-2 min-h-[48px] py-3 bg-[#D4F73C] hover:bg-[#c6eb2d] active:scale-[0.99] disabled:opacity-50 text-[#090B0A] font-extrabold rounded-2xl transition flex items-center justify-center gap-2 shadow-lg shadow-[#D4F73C]/20 text-xs sm:text-sm cursor-pointer"
                 >
-                  <span>{isRegister ? 'Vytvořit účet' : 'Přihlásit se'}</span>
+                  <span>{isSubmitting ? 'Zpracovávám...' : isRegister ? 'Vytvořit účet' : 'Přihlásit se'}</span>
                   <ArrowRight className="w-4 h-4 stroke-[2.5]" />
                 </button>
               </form>
@@ -391,10 +427,11 @@ export const AuthScreen: React.FC = () => {
 
                 <button
                   type="submit"
-                  className="w-full mt-2 min-h-[48px] py-3 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 active:scale-[0.99] text-slate-950 font-extrabold rounded-2xl transition flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 text-xs sm:text-sm cursor-pointer"
+                  disabled={isSubmitting}
+                  className="w-full mt-2 min-h-[48px] py-3 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 active:scale-[0.99] disabled:opacity-50 text-slate-950 font-extrabold rounded-2xl transition flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 text-xs sm:text-sm cursor-pointer"
                 >
                   <Shield className="w-4 h-4 stroke-[2.5]" />
-                  <span>Vstoupit do administrace</span>
+                  <span>{isSubmitting ? 'Ověřuji vedení...' : 'Vstoupit do administrace'}</span>
                 </button>
               </form>
             </div>

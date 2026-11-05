@@ -5,6 +5,7 @@ import '../../models/project_model.dart';
 import '../../models/time_entry.dart';
 import '../../services/auth_service.dart';
 import '../../services/firestore_service.dart';
+import '../../services/location_service.dart';
 import '../../utils/formatters.dart';
 import 'shift_form_dialog.dart';
 
@@ -110,9 +111,11 @@ class _WorkerDashboardState extends State<WorkerDashboard> {
     if (confirmed == true) {
       final project = openProjects.firstWhere((p) => p.id == selectedId);
       try {
+        final loc = await LocationService.getCurrentLocation();
         await widget.firestoreService.startLiveShift(
           user: widget.currentUser,
           project: project,
+          startLocation: loc,
         );
       } catch (e) {
         if (mounted) {
@@ -253,6 +256,7 @@ class _WorkerDashboardState extends State<WorkerDashboard> {
         return;
       }
 
+      final loc = await LocationService.getCurrentLocation();
       await widget.firestoreService.stopLiveShift(
         runningEntry: runningEntry,
         endTime: now,
@@ -261,6 +265,7 @@ class _WorkerDashboardState extends State<WorkerDashboard> {
         hourlyRate: result['rate'] as double,
         isCustomRate: (result['rate'] as double) != widget.currentUser.defaultHourlyRate,
         submitDirectly: result['submit'] as bool,
+        endLocation: loc,
       );
     }
   }
@@ -724,6 +729,28 @@ class _WorkerDashboardState extends State<WorkerDashboard> {
               Text(
                 'Poznámka: ${entry.note}',
                 style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey.shade600, fontSize: 12),
+              ),
+            ],
+
+            if (entry.startLocation != null || entry.endLocation != null) ...[
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Icon(Icons.location_on, size: 14, color: Colors.blue.shade600),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      [
+                        if (entry.startLocation != null)
+                          'GPS Start: ${(entry.startLocation!['latitude'] as num).toStringAsFixed(4)}, ${(entry.startLocation!['longitude'] as num).toStringAsFixed(4)}',
+                        if (entry.endLocation != null)
+                          'GPS Konec: ${(entry.endLocation!['latitude'] as num).toStringAsFixed(4)}, ${(entry.endLocation!['longitude'] as num).toStringAsFixed(4)}',
+                      ].join(' | '),
+                      style: TextStyle(color: Colors.blue.shade800, fontSize: 11),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
               ),
             ],
 

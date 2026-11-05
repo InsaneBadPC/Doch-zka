@@ -139,6 +139,7 @@ class FirestoreService {
   Future<String> startLiveShift({
     required AppUser user,
     required ProjectModel project,
+    Map<String, dynamic>? startLocation,
   }) async {
     final now = DateTime.now();
     final newDoc = _timeEntriesCol.doc();
@@ -159,6 +160,7 @@ class FirestoreService {
       note: '',
       status: 'draft',
       isRunning: true,
+      startLocation: startLocation,
     );
 
     await newDoc.set(entry.toMap());
@@ -174,6 +176,7 @@ class FirestoreService {
     required double hourlyRate,
     required bool isCustomRate,
     required bool submitDirectly, // true = pending, false = draft
+    Map<String, dynamic>? endLocation,
   }) async {
     final start = DateTime.parse(runningEntry.startTime);
     final totalDurationMinutes = endTime.difference(start).inMinutes;
@@ -181,7 +184,7 @@ class FirestoreService {
     final hoursWorked = double.parse((netMinutes / 60.0).toStringAsFixed(2));
     final totalAmount = double.parse((hoursWorked * hourlyRate).toStringAsFixed(2));
 
-    await _timeEntriesCol.doc(runningEntry.id).update({
+    final Map<String, dynamic> updateData = {
       'endTime': endTime.toIso8601String(),
       'breakMinutes': breakMinutes,
       'hoursWorked': hoursWorked,
@@ -191,7 +194,12 @@ class FirestoreService {
       'note': note.trim(),
       'status': submitDirectly ? 'pending' : 'draft',
       'isRunning': false,
-    });
+    };
+    if (endLocation != null) {
+      updateData['endLocation'] = endLocation;
+    }
+
+    await _timeEntriesCol.doc(runningEntry.id).update(updateData);
   }
 
   /// Ruční vytvoření směny

@@ -20,6 +20,8 @@ class TimeEntry {
   final String adminComment;
   final String? approvedBy;
   final Timestamp? approvedAt;
+  final Map<String, dynamic>? startLocation;
+  final Map<String, dynamic>? endLocation;
 
   TimeEntry({
     required this.id,
@@ -41,6 +43,8 @@ class TimeEntry {
     this.adminComment = '',
     this.approvedBy,
     this.approvedAt,
+    this.startLocation,
+    this.endLocation,
   });
 
   bool get isDraft => status == 'draft';
@@ -73,6 +77,8 @@ class TimeEntry {
           : (data['approvedAt'] is String && (data['approvedAt'] as String).isNotEmpty
               ? Timestamp.fromDate(DateTime.tryParse(data['approvedAt'] as String) ?? DateTime.now())
               : null),
+      startLocation: data['startLocation'] is Map ? Map<String, dynamic>.from(data['startLocation'] as Map) : null,
+      endLocation: data['endLocation'] is Map ? Map<String, dynamic>.from(data['endLocation'] as Map) : null,
     );
   }
 
@@ -96,6 +102,8 @@ class TimeEntry {
       'adminComment': adminComment,
       'approvedBy': approvedBy,
       'approvedAt': approvedAt,
+      if (startLocation != null) 'startLocation': startLocation,
+      if (endLocation != null) 'endLocation': endLocation,
     };
   }
 
@@ -118,6 +126,8 @@ class TimeEntry {
     String? adminComment,
     String? approvedBy,
     Timestamp? approvedAt,
+    Map<String, dynamic>? startLocation,
+    Map<String, dynamic>? endLocation,
   }) {
     return TimeEntry(
       id: id,
@@ -139,6 +149,8 @@ class TimeEntry {
       adminComment: adminComment ?? this.adminComment,
       approvedBy: approvedBy ?? this.approvedBy,
       approvedAt: approvedAt ?? this.approvedAt,
+      startLocation: startLocation ?? this.startLocation,
+      endLocation: endLocation ?? this.endLocation,
     );
   }
 }

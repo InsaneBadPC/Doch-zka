@@ -304,6 +304,28 @@ class _ApprovalTabState extends State<ApprovalTab> {
               ),
             ],
 
+            if (entry.startLocation != null || entry.endLocation != null) ...[
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Icon(Icons.location_on, size: 14, color: Colors.blue.shade600),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      [
+                        if (entry.startLocation != null)
+                          'GPS Start: ${(entry.startLocation!['latitude'] as num).toStringAsFixed(4)}, ${(entry.startLocation!['longitude'] as num).toStringAsFixed(4)}',
+                        if (entry.endLocation != null)
+                          'GPS Konec: ${(entry.endLocation!['latitude'] as num).toStringAsFixed(4)}, ${(entry.endLocation!['longitude'] as num).toStringAsFixed(4)}',
+                      ].join(' | '),
+                      style: TextStyle(color: Colors.blue.shade800, fontSize: 12),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+
             const Divider(height: 20),
 
             // Tlačítka Schválit / Vrátit
