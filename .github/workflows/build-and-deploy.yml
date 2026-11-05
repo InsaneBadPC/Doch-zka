@@ -81,19 +81,21 @@ jobs:
           retention-days: 30
 
       - name: Vytvoření / Aktualizace GitHub Release s nejnovějším APK
-        uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-        with:
-          tag_name: latest
-          name: "Nejnovější sestavení (Web & Android APK)"
-          body: |
-            Automatické sestavení aplikace **Firemní Docházka a Evidence Zakázek**.
-            
-            - 📱 **Android APK**: Stáhněte soubor `Dochazka-v${{ env.APP_VER }}.apk` (nebo `app-release.apk`) níže a nainstalujte do mobilu.
-            - 🌐 **Web & iOS PWA**: Běží online přes GitHub Pages.
-          files: |
-            build/app/outputs/flutter-apk/Dochazka-v${{ env.APP_VER }}.apk
-            build/app/outputs/flutter-apk/app-release.apk
-          make_latest: true
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT != '' && secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT != '' && secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+        run: |
+          # 1. Nahrajeme APK soubory do existujícího release 'latest'
+          gh release upload latest \
+            build/app/outputs/flutter-apk/Dochazka-v${{ env.APP_VER }}.apk \
+            build/app/outputs/flutter-apk/app-release.apk \
+            --clobber || true
+
+          # 2. Vytvoříme nebo aktualizujeme release se specifickou verzí
+          gh release create "v${{ env.APP_VER }}" \
+            build/app/outputs/flutter-apk/Dochazka-v${{ env.APP_VER }}.apk \
+            build/app/outputs/flutter-apk/app-release.apk \
+            --title "Sestavení v${{ env.APP_VER }} (Web & Android APK)" \
+            --notes "Automatické sestavení aplikace **Firemní Docházka a Evidence Zakázek** (v${{ env.APP_VER }})." \
+            --latest || gh release upload "v${{ env.APP_VER }}" \
+            build/app/outputs/flutter-apk/Dochazka-v${{ env.APP_VER }}.apk \
+            build/app/outputs/flutter-apk/app-release.apk --clobber
