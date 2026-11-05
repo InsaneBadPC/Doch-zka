@@ -14,9 +14,6 @@ import {
 } from 'lucide-react';
 
 export const AuthScreen: React.FC = () => {
-  // Přepínač mezi přístupem pro zaměstnance a vedení (Marek Dubina)
-  const [portalType, setPortalType] = useState<'worker' | 'boss'>('worker');
-
   // Zaměstnanec stavy
   const [isRegister, setIsRegister] = useState(false);
   const [name, setName] = useState('');
@@ -25,18 +22,21 @@ export const AuthScreen: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [hourlyRate, setHourlyRate] = useState(250);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [isWorkerSubmitting, setIsWorkerSubmitting] = useState(false);
+  const [workerError, setWorkerError] = useState<string | null>(null);
 
   // Vedení (Šéf) stavy
   const [bossName, setBossName] = useState(BOSS_NAME);
   const [bossPassword, setBossPassword] = useState('');
   const [showBossPassword, setShowBossPassword] = useState(false);
+  const [isBossSubmitting, setIsBossSubmitting] = useState(false);
+  const [bossError, setBossError] = useState<string | null>(null);
 
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const handleGoogleSignIn = async () => {
     setIsGoogleLoading(true);
-    setError(null);
+    setWorkerError(null);
     try {
       const appUser = await firebaseAuthService.signInWithGoogle();
       storageService.setCurrentUser(appUser);
@@ -52,40 +52,38 @@ export const AuthScreen: React.FC = () => {
       }
     } catch (err: any) {
       if (err.code === 'auth/unauthorized-domain') {
-        setError(
-          'Doména insanebadpc.github.io zatím není povolena ve Firebase Console (Authentication > Settings > Authorized domains). Prozatím se prosím přihlaste níže e-mailem a heslem.'
+        setWorkerError(
+          'Doména insanebadpc.github.io zatím není povolena ve Firebase Console. Přihlaste se prosím e-mailem a heslem.'
         );
       } else if (err.code !== 'auth/popup-closed-by-user') {
-        setError(err.message || 'Nepodařilo se přihlásit přes Google.');
+        setWorkerError(err.message || 'Nepodařilo se přihlásit přes Google.');
       }
     } finally {
       setIsGoogleLoading(false);
     }
   };
 
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
   const handleWorkerSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
+    setWorkerError(null);
 
     const cleanEmail = email.trim();
     if (!cleanEmail || !cleanEmail.includes('@')) {
-      setError('Zadejte platnou e-mailovou adresu zaměstnance.');
+      setWorkerError('Zadejte platnou e-mailovou adresu.');
       return;
     }
 
     if (!password || password.length < 4) {
-      setError('Heslo musí mít alespoň 4 znaky.');
+      setWorkerError('Heslo musí mít alespoň 4 znaky.');
       return;
     }
 
-    setIsSubmitting(true);
+    setIsWorkerSubmitting(true);
     try {
       if (isRegister) {
         if (!name.trim()) {
-          setError('Zadejte své celé jméno a příjmení.');
-          setIsSubmitting(false);
+          setWorkerError('Zadejte své celé jméno a příjmení.');
+          setIsWorkerSubmitting(false);
           return;
         }
 
@@ -117,26 +115,26 @@ export const AuthScreen: React.FC = () => {
         if (fbUser) {
           storageService.setCurrentUser(fbUser);
         } else if (!localUser) {
-          setError('Zaměstnanec s tímto e-mailem nebyl nalezen nebo heslo nesouhlasí.');
+          setWorkerError('Zaměstnanec s tímto e-mailem nebyl nalezen nebo heslo nesouhlasí.');
         }
       }
     } catch (err: any) {
-      setError(err.message || 'Chyba při přihlašování.');
+      setWorkerError(err.message || 'Chyba při přihlašování.');
     } finally {
-      setIsSubmitting(false);
+      setIsWorkerSubmitting(false);
     }
   };
 
   const handleBossSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
+    setBossError(null);
 
     if (!bossPassword) {
-      setError('Zadejte heslo správce.');
+      setBossError('Zadejte heslo vedení.');
       return;
     }
 
-    setIsSubmitting(true);
+    setIsBossSubmitting(true);
     try {
       try {
         await firebaseAuthService.signInBoss(bossPassword);
@@ -145,117 +143,97 @@ export const AuthScreen: React.FC = () => {
       }
       storageService.loginBoss(bossPassword, bossName);
     } catch (err: any) {
-      setError(err.message || 'Nesprávné heslo pro přístup správce.');
+      setBossError(err.message || 'Nesprávné heslo pro přístup správce.');
     } finally {
-      setIsSubmitting(false);
+      setIsBossSubmitting(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#090B0A] text-slate-100 flex items-center justify-center p-4 sm:p-6 font-sans relative overflow-hidden">
+    <div className="min-h-screen bg-[#090B0A] text-slate-100 flex items-center justify-center p-4 sm:p-6 lg:p-8 font-sans relative overflow-hidden">
       {/* Decentní pozadí */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-[#D4F73C]/5 rounded-full blur-[140px] pointer-events-none"></div>
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#D4F73C]/5 rounded-full blur-[160px] pointer-events-none"></div>
 
-      <div className="w-full max-w-md relative z-10 space-y-6">
+      <div className="w-full max-w-4xl relative z-10 space-y-6">
         {/* Pouze název aplikace a ikona v záhlaví */}
         <div className="text-center space-y-2">
-          <div className="inline-flex w-14 h-14 rounded-2xl bg-[#D4F73C] text-[#090B0A] items-center justify-center font-black shadow-lg shadow-[#D4F73C]/20 mb-1">
-            <Clock className="w-7 h-7 stroke-[2.5]" />
+          <div className="inline-flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-[#D4F73C] text-[#090B0A] flex items-center justify-center font-black shadow-lg shadow-[#D4F73C]/20">
+              <Clock className="w-6 h-6 stroke-[2.5]" />
+            </div>
+            <div className="text-left">
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight uppercase">
+                DOCHÁZKA
+              </h1>
+              <p className="text-xs text-slate-400 font-mono">
+                Evidence zakázek a směn
+              </p>
+            </div>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-            Docházka
-          </h1>
         </div>
 
-        {/* Hlavní autentizační karta */}
-        <div className="bg-[#121513] border border-[#232A23] rounded-[28px] p-6 sm:p-8 shadow-2xl">
-          {/* Přepínač: Zaměstnanec vs Vedení */}
-          <div className="flex bg-[#0A0D0B] p-1.5 rounded-2xl border border-[#222922] mb-6 gap-1.5">
-            <button
-              type="button"
-              onClick={() => {
-                setPortalType('worker');
-                setError(null);
-              }}
-              className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
-                portalType === 'worker'
-                  ? 'bg-[#1C251C] text-[#D4F73C] border border-[#2B392B] shadow-sm'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <User className="w-3.5 h-3.5" />
-              <span>Zaměstnanec</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setPortalType('boss');
-                setError(null);
-              }}
-              className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
-                portalType === 'boss'
-                  ? 'bg-[#2E2812] text-amber-300 border border-amber-500/40 shadow-sm'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <Shield className="w-3.5 h-3.5 text-amber-400" />
-              <span>Vedení (Šéf)</span>
-            </button>
-          </div>
-
-          {error && (
-            <div className="mb-5 p-3 rounded-2xl bg-[#2A1516] border border-[#FF5B65]/40 text-[#FF5B65] text-xs font-medium">
-              {error}
-            </div>
-          )}
-
-          {/* Sekvence: Přihlášení / Registrace zaměstnance */}
-          {portalType === 'worker' && (
+        {/* 2 oddělené formuláře: Zvlášť pro pracovníka a zvlášť pro šéfa */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
+          {/* ================= 1. KARTA: ZAMĚSTNANEC ================= */}
+          <div className="bg-[#121513] border border-[#232A23] rounded-[28px] p-6 sm:p-7 shadow-2xl flex flex-col justify-between">
             <div>
-              <div className="flex items-center justify-between mb-5 pb-3 border-b border-[#1E251E]">
-                <span className="text-xs font-bold text-slate-300 uppercase tracking-wider font-mono">
-                  {isRegister ? 'Registrace' : 'Přihlášení'}
-                </span>
+              {/* Záhlaví karty pracovníka */}
+              <div className="flex items-center justify-between pb-4 border-b border-[#1E251E] mb-5">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-[#1C251C] border border-[#2B392B] text-[#D4F73C] flex items-center justify-center">
+                    <User className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-bold text-white">Přihlášení pracovníka</h2>
+                    <p className="text-[11px] text-slate-400 font-mono">Záznam práce a směn</p>
+                  </div>
+                </div>
 
                 <div className="flex bg-[#0A0D0B] p-1 rounded-xl border border-[#222922]">
                   <button
                     type="button"
                     onClick={() => {
                       setIsRegister(false);
-                      setError(null);
+                      setWorkerError(null);
                     }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
                       !isRegister
                         ? 'bg-[#D4F73C] text-[#090B0A] shadow-sm'
                         : 'text-slate-400 hover:text-white'
                     }`}
                   >
-                    Přihlásit
+                    Vstup
                   </button>
                   <button
                     type="button"
                     onClick={() => {
                       setIsRegister(true);
-                      setError(null);
+                      setWorkerError(null);
                     }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
                       isRegister
                         ? 'bg-[#D4F73C] text-[#090B0A] shadow-sm'
                         : 'text-slate-400 hover:text-white'
                     }`}
                   >
-                    Registrovat
+                    Registrace
                   </button>
                 </div>
               </div>
 
+              {workerError && (
+                <div className="mb-4 p-3 rounded-2xl bg-[#2A1516] border border-[#FF5B65]/40 text-[#FF5B65] text-xs font-medium">
+                  {workerError}
+                </div>
+              )}
+
               {/* Google přihlášení */}
-              <div className="mb-5 space-y-3">
+              <div className="mb-4 space-y-3">
                 <button
                   type="button"
                   disabled={isGoogleLoading}
                   onClick={handleGoogleSignIn}
-                  className="w-full min-h-[46px] py-2.5 px-4 bg-white hover:bg-slate-100 active:scale-[0.99] text-slate-900 font-extrabold rounded-2xl transition flex items-center justify-center gap-3 shadow-lg shadow-white/10 text-xs sm:text-sm group cursor-pointer"
+                  className="w-full min-h-[44px] py-2 px-3 bg-white hover:bg-slate-100 active:scale-[0.99] text-slate-900 font-extrabold rounded-2xl transition flex items-center justify-center gap-2.5 shadow-md text-xs cursor-pointer group"
                 >
                   <svg className="w-4 h-4 shrink-0 transition group-hover:scale-105" viewBox="0 0 24 24">
                     <path
@@ -276,13 +254,11 @@ export const AuthScreen: React.FC = () => {
                     />
                   </svg>
                   <span>
-                    {isGoogleLoading
-                      ? 'Probíhá přihlašování...'
-                      : 'Přihlásit se přes Google'}
+                    {isGoogleLoading ? 'Přihlašuji...' : 'Přihlásit se přes Google'}
                   </span>
                 </button>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                   <div className="flex-1 border-t border-[#1E251E]"></div>
                   <span className="text-[10px] uppercase tracking-wider font-mono text-slate-500">
                     nebo e-mailem a heslem
@@ -291,11 +267,11 @@ export const AuthScreen: React.FC = () => {
                 </div>
               </div>
 
-              {/* Zaměstnanecký formulář */}
-              <form onSubmit={handleWorkerSubmit} className="space-y-4">
+              {/* Formulář pro pracovníka */}
+              <form onSubmit={handleWorkerSubmit} className="space-y-3.5">
                 {isRegister && (
                   <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    <label className="block text-xs font-semibold text-slate-300 mb-1">
                       Jméno a příjmení *
                     </label>
                     <input
@@ -304,13 +280,13 @@ export const AuthScreen: React.FC = () => {
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       placeholder="Jméno a příjmení"
-                      className="w-full px-4 py-3 bg-[#0A0D0B] border border-[#232A23] focus:border-[#D4F73C] rounded-2xl text-white text-sm focus:outline-none transition"
+                      className="w-full px-3.5 py-2.5 bg-[#0A0D0B] border border-[#232A23] focus:border-[#D4F73C] rounded-xl text-white text-xs sm:text-sm focus:outline-none transition"
                     />
                   </div>
                 )}
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
                     E-mailová adresa *
                   </label>
                   <input
@@ -319,12 +295,12 @@ export const AuthScreen: React.FC = () => {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="vas@email.cz"
-                    className="w-full px-4 py-3 bg-[#0A0D0B] border border-[#232A23] focus:border-[#D4F73C] rounded-2xl text-white text-sm font-mono focus:outline-none transition"
+                    className="w-full px-3.5 py-2.5 bg-[#0A0D0B] border border-[#232A23] focus:border-[#D4F73C] rounded-xl text-white text-xs sm:text-sm font-mono focus:outline-none transition"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
                     Heslo *
                   </label>
                   <div className="relative">
@@ -334,21 +310,21 @@ export const AuthScreen: React.FC = () => {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="••••••••"
-                      className="w-full px-4 py-3 bg-[#0A0D0B] border border-[#232A23] focus:border-[#D4F73C] rounded-2xl text-white text-sm focus:outline-none transition pr-11"
+                      className="w-full px-3.5 py-2.5 bg-[#0A0D0B] border border-[#232A23] focus:border-[#D4F73C] rounded-xl text-white text-xs sm:text-sm focus:outline-none transition pr-10"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition"
                     >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                     </button>
                   </div>
                 </div>
 
                 {isRegister && (
                   <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    <label className="block text-xs font-semibold text-slate-300 mb-1">
                       Hodinová sazba (Kč/h)
                     </label>
                     <input
@@ -356,40 +332,59 @@ export const AuthScreen: React.FC = () => {
                       value={hourlyRate}
                       min={50}
                       onChange={(e) => setHourlyRate(Number(e.target.value))}
-                      className="w-full px-4 py-3 bg-[#0A0D0B] border border-[#232A23] focus:border-[#D4F73C] rounded-2xl text-white text-sm font-mono focus:outline-none"
+                      className="w-full px-3.5 py-2.5 bg-[#0A0D0B] border border-[#232A23] focus:border-[#D4F73C] rounded-xl text-white text-xs sm:text-sm font-mono focus:outline-none"
                     />
                   </div>
                 )}
 
                 <button
                   type="submit"
-                  disabled={isSubmitting}
-                  className="w-full mt-2 min-h-[48px] py-3 bg-[#D4F73C] hover:bg-[#c6eb2d] active:scale-[0.99] disabled:opacity-50 text-[#090B0A] font-extrabold rounded-2xl transition flex items-center justify-center gap-2 shadow-lg shadow-[#D4F73C]/20 text-xs sm:text-sm cursor-pointer"
+                  disabled={isWorkerSubmitting}
+                  className="w-full mt-2 min-h-[44px] py-2.5 bg-[#D4F73C] hover:bg-[#c6eb2d] active:scale-[0.99] disabled:opacity-50 text-[#090B0A] font-extrabold rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-[#D4F73C]/20 text-xs sm:text-sm cursor-pointer"
                 >
-                  <span>{isSubmitting ? 'Zpracovávám...' : isRegister ? 'Vytvořit účet' : 'Přihlásit se'}</span>
+                  <span>{isWorkerSubmitting ? 'Zpracovávám...' : isRegister ? 'Vytvořit účet' : 'Přihlásit se'}</span>
                   <ArrowRight className="w-4 h-4 stroke-[2.5]" />
                 </button>
               </form>
             </div>
-          )}
 
-          {/* Sekvence: Vstup pro vedení (Šéf - Marek Dubina) */}
-          {portalType === 'boss' && (
+            <div className="pt-4 mt-4 border-t border-[#1E251E] flex items-center justify-between text-[11px] text-slate-500 font-mono">
+              <span className="flex items-center gap-1.5">
+                <Lock className="w-3 h-3 text-[#D4F73C]" /> Zaměstnanecký portál
+              </span>
+            </div>
+          </div>
+
+          {/* ================= 2. KARTA: VEDENÍ (ŠÉF) ================= */}
+          <div className="bg-[#121513] border border-amber-500/30 rounded-[28px] p-6 sm:p-7 shadow-2xl flex flex-col justify-between">
             <div>
-              <div className="mb-5 pb-3 border-b border-[#1E251E]">
+              {/* Záhlaví karty šéfa */}
+              <div className="flex items-center justify-between pb-4 border-b border-[#1E251E] mb-5">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400 flex items-center justify-center">
-                    <Shield className="w-3.5 h-3.5" />
+                  <div className="w-8 h-8 rounded-xl bg-[#2E2812] border border-amber-500/40 text-amber-400 flex items-center justify-center">
+                    <Shield className="w-4 h-4" />
                   </div>
-                  <span className="text-xs font-bold text-amber-300 uppercase tracking-wider font-mono">
-                    Přístup vedení firmy
-                  </span>
+                  <div>
+                    <h2 className="text-sm font-bold text-amber-300">Vedení firmy (Šéf)</h2>
+                    <p className="text-[11px] text-slate-400 font-mono">Správa zakázek a schvalování</p>
+                  </div>
                 </div>
+
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[#2E2812] text-amber-300 border border-amber-500/30">
+                  ADMIN
+                </span>
               </div>
 
+              {bossError && (
+                <div className="mb-4 p-3 rounded-2xl bg-[#2A1516] border border-[#FF5B65]/40 text-[#FF5B65] text-xs font-medium">
+                  {bossError}
+                </div>
+              )}
+
+              {/* Formulář pro šéfa */}
               <form onSubmit={handleBossSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
                     Jméno správce
                   </label>
                   <input
@@ -398,13 +393,13 @@ export const AuthScreen: React.FC = () => {
                     value={bossName}
                     onChange={(e) => setBossName(e.target.value)}
                     placeholder="Marek Dubina"
-                    className="w-full px-4 py-3 bg-[#0A0D0B] border border-[#232A23] focus:border-amber-400 rounded-2xl text-white text-sm focus:outline-none transition"
+                    className="w-full px-3.5 py-2.5 bg-[#0A0D0B] border border-[#232A23] focus:border-amber-400 rounded-xl text-white text-xs sm:text-sm focus:outline-none transition"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                    Heslo *
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Heslo vedení *
                   </label>
                   <div className="relative">
                     <input
@@ -413,47 +408,52 @@ export const AuthScreen: React.FC = () => {
                       value={bossPassword}
                       onChange={(e) => setBossPassword(e.target.value)}
                       placeholder="Heslo vedení"
-                      className="w-full px-4 py-3 bg-[#0A0D0B] border border-[#232A23] focus:border-amber-400 rounded-2xl text-white text-sm focus:outline-none transition pr-11"
+                      className="w-full px-3.5 py-2.5 bg-[#0A0D0B] border border-[#232A23] focus:border-amber-400 rounded-xl text-white text-xs sm:text-sm focus:outline-none transition pr-10"
                     />
                     <button
                       type="button"
                       onClick={() => setShowBossPassword(!showBossPassword)}
-                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition"
                     >
-                      {showBossPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      {showBossPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                     </button>
                   </div>
                 </div>
 
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="w-full mt-2 min-h-[48px] py-3 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 active:scale-[0.99] disabled:opacity-50 text-slate-950 font-extrabold rounded-2xl transition flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 text-xs sm:text-sm cursor-pointer"
-                >
-                  <Shield className="w-4 h-4 stroke-[2.5]" />
-                  <span>{isSubmitting ? 'Ověřuji vedení...' : 'Vstoupit do administrace'}</span>
-                </button>
+                <div className="pt-2">
+                  <button
+                    type="submit"
+                    disabled={isBossSubmitting}
+                    className="w-full min-h-[44px] py-2.5 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 active:scale-[0.99] disabled:opacity-50 text-slate-950 font-extrabold rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 text-xs sm:text-sm cursor-pointer"
+                  >
+                    <Shield className="w-4 h-4 stroke-[2.5]" />
+                    <span>{isBossSubmitting ? 'Ověřuji vedení...' : 'Vstoupit do administrace'}</span>
+                  </button>
+                </div>
               </form>
             </div>
-          )}
 
-          {/* Spodní řádek: Zabezpečení a APK / sdílení */}
-          <div className="mt-6 pt-4 border-t border-[#1E251E] flex items-center justify-between text-xs text-slate-500">
-            <span className="flex items-center gap-1.5">
-              <Lock className="w-3 h-3 text-[#D4F73C]" /> Zabezpečeno
-            </span>
-            <button
-              type="button"
-              onClick={() => setIsShareModalOpen(true)}
-              className="text-xs font-mono text-slate-400 hover:text-[#D4F73C] flex items-center gap-1.5 transition cursor-pointer"
-            >
-              <Share2 className="w-3.5 h-3.5" /> Sdílet / Stáhnout APK
-            </button>
+            <div className="pt-4 mt-4 border-t border-[#1E251E] flex items-center justify-between text-[11px] text-slate-500 font-mono">
+              <span className="flex items-center gap-1.5">
+                <Shield className="w-3 h-3 text-amber-400" /> Přístup pouze pro vedení
+              </span>
+            </div>
           </div>
+        </div>
+
+        {/* Spodní lišta se sdílením / stažením APK */}
+        <div className="pt-2 text-center">
+          <button
+            type="button"
+            onClick={() => setIsShareModalOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#121513] hover:bg-[#1A221A] text-slate-400 hover:text-[#D4F73C] border border-[#232A23] text-xs font-mono transition cursor-pointer"
+          >
+            <Share2 className="w-3.5 h-3.5" />
+            <span>Sdílet aplikaci / Stáhnout Android APK</span>
+          </button>
         </div>
       </div>
 
-      {/* Modal pro sdílení */}
       <ShareAppModal
         isOpen={isShareModalOpen}
         onClose={() => setIsShareModalOpen(false)}

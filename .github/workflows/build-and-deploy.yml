@@ -65,13 +65,17 @@ jobs:
         run: flutter pub get
 
       - name: Sestavení Release APK balíčku
-        run: flutter build apk --release --android-skip-build-dependency-validation
+        run: |
+          flutter build apk --release --android-skip-build-dependency-validation
+          APP_VER=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1)
+          cp build/app/outputs/flutter-apk/app-release.apk "build/app/outputs/flutter-apk/Dochazka-v${APP_VER}.apk"
+          echo "APP_VER=${APP_VER}" >> $GITHUB_ENV
 
       - name: Uložení APK jako stahovatelný artefakt
         uses: actions/upload-artifact@v4
         with:
           name: dochazka-app-release-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: build/app/outputs/flutter-apk/Dochazka-v*.apk
           retention-days: 30
 
       - name: Vytvoření / Aktualizace GitHub Release s nejnovějším APK
@@ -83,9 +87,11 @@ jobs:
           body: |
             Automatické sestavení aplikace **Firemní Docházka a Evidence Zakázek**.
             
-            - 📱 **Android APK**: Stáhněte soubor `app-release.apk` níže a nainstalujte do mobilu.
+            - 📱 **Android APK**: Stáhněte soubor `Dochazka-v${{ env.APP_VER }}.apk` (nebo `app-release.apk`) níže a nainstalujte do mobilu.
             - 🌐 **Web & iOS PWA**: Běží online přes GitHub Pages.
-          files: build/app/outputs/flutter-apk/app-release.apk
+          files: |
+            build/app/outputs/flutter-apk/Dochazka-v${{ env.APP_VER }}.apk
+            build/app/outputs/flutter-apk/app-release.apk
           make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT != '' && secrets.GH_PAT || secrets.GITHUB_TOKEN }}

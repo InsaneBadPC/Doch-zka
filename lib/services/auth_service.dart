@@ -55,6 +55,60 @@ class AuthService {
     );
   }
 
+  /// Přihlášení vedení (Marek Dubina)
+  Future<AppUser> signInBoss({
+    required String bossName,
+    required String password,
+  }) async {
+    const bossEmail = 'marek.dubina@dochazka.cz';
+    if (password != 'MarekDubina4786') {
+      throw Exception('Nesprávné heslo pro přístup vedení.');
+    }
+
+    try {
+      final cred = await _auth.signInWithEmailAndPassword(
+        email: bossEmail,
+        password: password,
+      );
+      final uid = cred.user!.uid;
+      final doc = await _firestore.collection('users').doc(uid).get();
+      if (doc.exists) {
+        return AppUser.fromMap(doc.data()!);
+      }
+      final bossUser = AppUser(
+        id: uid,
+        name: bossName.trim().isNotEmpty ? bossName.trim() : 'Marek Dubina',
+        email: bossEmail,
+        role: 'admin',
+        defaultHourlyRate: 350.0,
+        allowCustomRate: true,
+        active: true,
+      );
+      await _firestore.collection('users').doc(uid).set(bossUser.toMap());
+      return bossUser;
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'user-not-found' || e.code == 'invalid-credential') {
+        final cred = await _auth.createUserWithEmailAndPassword(
+          email: bossEmail,
+          password: password,
+        );
+        final uid = cred.user!.uid;
+        final bossUser = AppUser(
+          id: uid,
+          name: bossName.trim().isNotEmpty ? bossName.trim() : 'Marek Dubina',
+          email: bossEmail,
+          role: 'admin',
+          defaultHourlyRate: 350.0,
+          allowCustomRate: true,
+          active: true,
+        );
+        await _firestore.collection('users').doc(uid).set(bossUser.toMap());
+        return bossUser;
+      }
+      rethrow;
+    }
+  }
+
   /// Odhlášení
   Future<void> signOut() async {
     await _auth.signOut();
