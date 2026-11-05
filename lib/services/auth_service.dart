@@ -1,14 +1,54 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import '../models/app_user.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final GoogleSignIn _googleSignIn = GoogleSignIn();
 
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
   User? get currentUser => _auth.currentUser;
+
+  /// Přihlášení přes Google účet
+  Future<AppUser?> signInWithGoogle() async {
+    try {
+      final googleUser = await _googleSignIn.signIn();
+      if (googleUser == null) return null; // Uživatel zrušil dialog
+
+      final googleAuth = await googleUser.authentication;
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      final userCredential = await _auth.signInWithCredential(credential);
+      final user = userCredential.user;
+      if (user == null) return null;
+
+      final doc = await _firestore.collection('users').doc(user.uid).get();
+      if (doc.exists) {
+        return AppUser.fromMap(doc.data()!);
+      }
+
+      final isOwner = user.email?.toLowerCase() == 'insanebad2@gmail.com';
+      final appUser = AppUser(
+        id: user.uid,
+        name: user.displayName ?? (user.email?.split('@')[0] ?? 'Pracovník'),
+        email: user.email ?? '',
+        role: isOwner ? 'admin' : 'worker',
+        defaultHourlyRate: isOwner ? 350.0 : 250.0,
+        allowCustomRate: isOwner,
+        active: true,
+      );
+      await _firestore.collection('users').doc(user.uid).set(appUser.toMap());
+      return appUser;
+    } catch (e) {
+      rethrow;
+    }
+  }
 
   /// Registrace nového pracovníka
   Future<AppUser> registerWithEmailAndPassword({

@@ -33,6 +33,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
   bool _isWorkerLoading = false;
   bool _isBossLoading = false;
+  bool _isGoogleLoading = false;
   String? _workerError;
   String? _bossError;
 
@@ -44,6 +45,26 @@ class _AuthScreenState extends State<AuthScreen> {
     _bossNameController.dispose();
     _bossPasswordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _submitGoogle() async {
+    setState(() {
+      _isGoogleLoading = true;
+      _workerError = null;
+    });
+
+    try {
+      final user = await widget.authService.signInWithGoogle();
+      if (user == null) {
+        return;
+      }
+    } catch (e) {
+      setState(() {
+        _workerError = 'Přihlášení přes Google vyžaduje propojení. Přihlaste se prosím e-mailem a heslem níže.';
+      });
+    } finally {
+      if (mounted) setState(() => _isGoogleLoading = false);
+    }
   }
 
   Future<void> _submitWorker() async {
@@ -342,6 +363,59 @@ class _AuthScreenState extends State<AuthScreen> {
               ),
               const SizedBox(height: 14),
             ],
+
+            // Google přihlášení jedním klikem
+            OutlinedButton(
+              onPressed: _isGoogleLoading ? null : _submitGoogle,
+              style: OutlinedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: const Color(0xFF090B0A),
+                side: const BorderSide(color: Colors.white),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              child: _isGoogleLoading
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF090B0A)),
+                    )
+                  : const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.g_mobiledata, color: Color(0xFF4285F4), size: 28),
+                        SizedBox(width: 6),
+                        Text(
+                          'Přihlásit se přes Google',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF0F172A),
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+            const SizedBox(height: 14),
+
+            const Row(
+              children: [
+                Expanded(child: Divider(color: Color(0xFF1E251E))),
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 10),
+                  child: Text(
+                    'nebo e-mailem a heslem',
+                    style: TextStyle(
+                      color: Color(0xFF64748B),
+                      fontSize: 10,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                ),
+                Expanded(child: Divider(color: Color(0xFF1E251E))),
+              ],
+            ),
+            const SizedBox(height: 14),
 
             if (_isRegister) ...[
               const Text(
