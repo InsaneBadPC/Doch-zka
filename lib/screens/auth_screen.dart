@@ -85,7 +85,7 @@ class _AuthScreenState extends State<AuthScreen> {
       } else {
         await widget.authService.signInWithEmailAndPassword(
           email: _emailController.text.trim(),
-          password: _passwordController.text,
+          password: _passwordController.text.trim(),
         );
       }
     } catch (e) {
@@ -119,7 +119,7 @@ class _AuthScreenState extends State<AuthScreen> {
     try {
       await widget.authService.signInBoss(
         bossName: _bossNameController.text.trim(),
-        password: _bossPasswordController.text,
+        password: _bossPasswordController.text.trim(),
       );
     } catch (e) {
       setState(() {

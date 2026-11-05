@@ -131,10 +131,6 @@ class StorageService {
       throw new Error('Nesprávné heslo pro přístup vedení.');
     }
 
-    if (loginName && loginName.trim().toLowerCase() !== BOSS_NAME.toLowerCase()) {
-      throw new Error('Neznámé jméno správce.');
-    }
-
     const users = this.getUsers();
     let boss = users.find(
       (u) =>
@@ -146,7 +142,7 @@ class StorageService {
     if (!boss) {
       boss = {
         id: 'user-boss-marek-dubina',
-        name: BOSS_NAME,
+        name: (loginName && loginName.trim().length > 0) ? loginName.trim() : BOSS_NAME,
         email: BOSS_EMAIL,
         role: 'admin',
         defaultHourlyRate: 350,
@@ -157,7 +153,9 @@ class StorageService {
       users.unshift(boss);
       localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(users));
     } else {
-      boss.name = BOSS_NAME;
+      if (loginName && loginName.trim().length > 0) {
+        boss.name = loginName.trim();
+      }
       boss.role = 'admin';
       boss.password = BOSS_PASSWORD;
       boss.allowCustomRate = true;
@@ -178,9 +176,26 @@ class StorageService {
       return this.loginBoss(password || '', cleanId === BOSS_NAME.toLowerCase() ? BOSS_NAME : undefined);
     }
 
-    const found = users.find(
+    let found = users.find(
       (u) => u.email.toLowerCase() === cleanId || u.name.toLowerCase() === cleanId
     );
+
+    // Pokud je to Petr Lukeš a v localStorage ještě nebyl načten
+    if (!found && cleanId === 'insanebad2@gmail.com') {
+      found = {
+        id: 'user-worker-petr-lukes',
+        name: 'Petr Lukeš',
+        email: 'insanebad2@gmail.com',
+        role: 'worker',
+        defaultHourlyRate: 200,
+        allowCustomRate: false,
+        active: true,
+        password: 'Heslo0897@',
+      };
+      users.push(found);
+      localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(users));
+    }
+
     if (!found) {
       return null;
     }
@@ -190,7 +205,7 @@ class StorageService {
       throw new Error('Nesprávné heslo.');
     }
 
-    // Pokud je uživatel bez nastaveného hesla (např. z importu), nastavíme ho při prvním přihlášení
+    // Pokud je uživatel bez nastaveného hesla, nastavíme ho při prvním přihlášení
     if (!found.password && password) {
       found.password = password;
       this.updateUser(found);

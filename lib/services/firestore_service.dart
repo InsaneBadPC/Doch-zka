@@ -38,9 +38,9 @@ class FirestoreService {
     });
   }
 
-  /// Aktualizace údajů pracovníka adminem
+  /// Aktualizace nebo vytvoření údajů pracovníka adminem
   Future<void> updateUser(AppUser user) async {
-    await _usersCol.doc(user.id).update(user.toMap());
+    await _usersCol.doc(user.id).set(user.toMap(), SetOptions(merge: true));
   }
 
   // ================= PROJECTS =================
