@@ -33,14 +33,14 @@ class AuthService {
         return AppUser.fromMap(user.uid, doc.data()!);
       }
 
-      final isOwner = user.email?.toLowerCase() == 'insanebad2@gmail.com';
+      final isPetr = user.email?.toLowerCase() == 'insanebad2@gmail.com';
       final appUser = AppUser(
         id: user.uid,
-        name: user.displayName ?? (user.email?.split('@')[0] ?? 'Pracovník'),
+        name: isPetr ? 'Petr Lukeš' : (user.displayName ?? (user.email?.split('@')[0] ?? 'Pracovník')),
         email: user.email ?? '',
-        role: isOwner ? 'admin' : 'worker',
-        defaultHourlyRate: isOwner ? 350.0 : 250.0,
-        allowCustomRate: isOwner,
+        role: 'worker',
+        defaultHourlyRate: isPetr ? 200.0 : 250.0,
+        allowCustomRate: false,
         active: true,
       );
       await _firestore.collection('users').doc(user.uid).set(appUser.toMap());

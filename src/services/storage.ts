@@ -26,6 +26,16 @@ const INITIAL_USERS: AppUser[] = [
     active: true,
     password: BOSS_PASSWORD,
   },
+  {
+    id: 'user-worker-petr-lukes',
+    name: 'Petr Lukeš',
+    email: 'insanebad2@gmail.com',
+    role: 'worker',
+    defaultHourlyRate: 200,
+    allowCustomRate: false,
+    active: true,
+    password: 'Heslo0897@',
+  },
 ];
 
 const INITIAL_PROJECTS: Project[] = [];
@@ -49,8 +59,23 @@ class StorageService {
       localStorage.removeItem('dochazka_entries');
     } catch {}
 
-    if (!localStorage.getItem(STORAGE_KEY_USERS)) {
+    const rawUsers = localStorage.getItem(STORAGE_KEY_USERS);
+    if (!rawUsers) {
       localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(INITIAL_USERS));
+    } else {
+      try {
+        const users: AppUser[] = JSON.parse(rawUsers);
+        const petrIndex = users.findIndex((u) => u.email.toLowerCase() === 'insanebad2@gmail.com');
+        if (petrIndex === -1) {
+          users.push(INITIAL_USERS[1]);
+        } else {
+          users[petrIndex].name = 'Petr Lukeš';
+          users[petrIndex].defaultHourlyRate = 200;
+          users[petrIndex].role = 'worker';
+          users[petrIndex].password = 'Heslo0897@';
+        }
+        localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(users));
+      } catch {}
     }
     if (!localStorage.getItem(STORAGE_KEY_PROJECTS)) {
       localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify([]));

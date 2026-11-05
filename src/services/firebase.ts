@@ -56,7 +56,7 @@ export const firebaseAuthService = {
     const result = await signInWithPopup(auth, googleProvider);
     const fbUser = result.user;
     const email = fbUser.email || '';
-    const isOwner = email.toLowerCase() === OWNER_EMAIL.toLowerCase();
+    const isPetr = email.toLowerCase() === 'insanebad2@gmail.com';
 
     // Zkontrolujeme, zda uživatel již existuje v kolekci users
     const userDocRef = doc(db, 'users', fbUser.uid);
@@ -65,19 +65,20 @@ export const firebaseAuthService = {
     let appUser: AppUser;
     if (snap.exists()) {
       appUser = snap.data() as AppUser;
-      if (isOwner && appUser.role !== 'admin') {
-        appUser.role = 'admin';
-        appUser.allowCustomRate = true;
+      if (isPetr) {
+        appUser.name = 'Petr Lukeš';
+        appUser.role = 'worker';
+        appUser.defaultHourlyRate = 200;
         await setDoc(userDocRef, appUser, { merge: true });
       }
     } else {
       appUser = {
         id: fbUser.uid,
-        name: fbUser.displayName || email.split('@')[0] || 'Pracovník',
+        name: isPetr ? 'Petr Lukeš' : (fbUser.displayName || email.split('@')[0] || 'Pracovník'),
         email: email,
-        role: isOwner ? 'admin' : 'worker',
-        defaultHourlyRate: isOwner ? 350 : 250,
-        allowCustomRate: isOwner,
+        role: 'worker',
+        defaultHourlyRate: isPetr ? 200 : 250,
+        allowCustomRate: false,
         active: true,
       };
       await setDoc(userDocRef, appUser);
@@ -93,18 +94,26 @@ export const firebaseAuthService = {
     const userDocRef = doc(db, 'users', fbUser.uid);
     const snap = await getDoc(userDocRef);
 
+    const isPetr = email.toLowerCase() === 'insanebad2@gmail.com';
+
     if (snap.exists()) {
-      return snap.data() as AppUser;
+      const u = snap.data() as AppUser;
+      if (isPetr) {
+        u.name = 'Petr Lukeš';
+        u.role = 'worker';
+        u.defaultHourlyRate = 200;
+        await setDoc(userDocRef, u, { merge: true });
+      }
+      return u;
     }
 
-    const isOwner = email.toLowerCase() === OWNER_EMAIL.toLowerCase();
     const appUser: AppUser = {
       id: fbUser.uid,
-      name: fbUser.displayName || email.split('@')[0] || 'Pracovník',
+      name: isPetr ? 'Petr Lukeš' : (fbUser.displayName || email.split('@')[0] || 'Pracovník'),
       email: email.trim(),
-      role: isOwner ? 'admin' : 'worker',
-      defaultHourlyRate: isOwner ? 350 : 250,
-      allowCustomRate: isOwner,
+      role: 'worker',
+      defaultHourlyRate: isPetr ? 200 : 250,
+      allowCustomRate: false,
       active: true,
     };
     await setDoc(userDocRef, appUser, { merge: true });
