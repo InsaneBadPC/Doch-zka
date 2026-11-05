@@ -25,10 +25,15 @@ function getOrIncrementBuildVersion(isBuild: boolean) {
   }
 
   if (isBuild) {
-    data.buildNumber += 1;
-    // Automaticky odvozená vyšší verze např. 1.0.2, 1.0.3 atd.
-    const patch = data.buildNumber - 100;
-    data.version = `1.0.${patch}`;
+    const ghRunNum = parseInt(process.env.GITHUB_RUN_NUMBER || '', 10);
+    if (!isNaN(ghRunNum) && ghRunNum > 0) {
+      data.buildNumber = 100 + ghRunNum;
+      data.version = `1.0.${ghRunNum}`;
+    } else {
+      data.buildNumber += 1;
+      const patch = data.buildNumber - 100;
+      data.version = `1.0.${patch}`;
+    }
     data.buildTime = new Date().toISOString();
     try {
       fs.writeFileSync(versionPath, JSON.stringify(data, null, 2), 'utf-8');

@@ -139,9 +139,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
     showToast(`Údaje uživatele ${u.name} byly uloženy.`);
   };
 
-  const handleCreateUser = (name: string, email: string, role: 'worker' | 'admin', rate: number, allowCustom: boolean) => {
+  const handleCreateUser = (
+    name: string,
+    email: string,
+    role: 'worker' | 'admin',
+    rate: number,
+    allowCustom: boolean,
+    password?: string
+  ) => {
     try {
-      storageService.addUser(name, email, role, rate, allowCustom);
+      storageService.addUser(name, email, role, rate, allowCustom, password);
       setIsNewUserModalOpen(false);
       showToast(`Účet pro zaměstnance ${name} byl vytvořen.`);
     } catch (err: any) {
@@ -1202,10 +1209,18 @@ const CreateProjectForm: React.FC<{
 
 const CreateUserForm: React.FC<{
   onClose: () => void;
-  onSubmit: (name: string, email: string, role: 'worker' | 'admin', rate: number, allowCustom: boolean) => void;
+  onSubmit: (
+    name: string,
+    email: string,
+    role: 'worker' | 'admin',
+    rate: number,
+    allowCustom: boolean,
+    password?: string
+  ) => void;
 }> = ({ onClose, onSubmit }) => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [role, setRole] = useState<'worker' | 'admin'>('worker');
   const [rate, setRate] = useState(250);
   const [allowCustom, setAllowCustom] = useState(false);
@@ -1213,7 +1228,7 @@ const CreateUserForm: React.FC<{
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !email.includes('@')) return;
-    onSubmit(name, email, role, rate, allowCustom);
+    onSubmit(name, email, role, rate, allowCustom, password);
   };
 
   return (
@@ -1238,6 +1253,18 @@ const CreateUserForm: React.FC<{
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="martin.kovar@firma.cz"
+          className="w-full px-4 py-3 bg-[#0A0D0B] border border-[#232A23] focus:border-[#D4F73C] rounded-2xl text-white text-sm font-mono focus:outline-none"
+        />
+      </div>
+
+      <div>
+        <label className="block text-xs font-semibold text-slate-300 mb-1">Přihlašovací heslo *</label>
+        <input
+          type="text"
+          required
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Nastavte heslo pro zaměstnance"
           className="w-full px-4 py-3 bg-[#0A0D0B] border border-[#232A23] focus:border-[#D4F73C] rounded-2xl text-white text-sm font-mono focus:outline-none"
         />
       </div>
@@ -1303,6 +1330,8 @@ const EditUserForm: React.FC<{
   onSubmit: (u: AppUser) => void;
 }> = ({ user, onClose, onSubmit }) => {
   const [name, setName] = useState(user.name);
+  const [email, setEmail] = useState(user.email);
+  const [password, setPassword] = useState(user.password || '');
   const [rate, setRate] = useState(user.defaultHourlyRate);
   const [allowCustom, setAllowCustom] = useState(user.allowCustomRate);
   const [active, setActive] = useState(user.active);
@@ -1313,6 +1342,8 @@ const EditUserForm: React.FC<{
     onSubmit({
       ...user,
       name: name.trim(),
+      email: email.trim(),
+      password: password.trim() || user.password,
       defaultHourlyRate: rate,
       allowCustomRate: allowCustom,
       active,
@@ -1330,6 +1361,28 @@ const EditUserForm: React.FC<{
           value={name}
           onChange={(e) => setName(e.target.value)}
           className="w-full px-4 py-3 bg-[#0A0D0B] border border-[#232A23] rounded-2xl text-white text-sm"
+        />
+      </div>
+
+      <div>
+        <label className="block text-xs font-semibold text-slate-300 mb-1">Přihlašovací e-mail</label>
+        <input
+          type="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="w-full px-4 py-3 bg-[#0A0D0B] border border-[#232A23] rounded-2xl text-white text-sm font-mono"
+        />
+      </div>
+
+      <div>
+        <label className="block text-xs font-semibold text-slate-300 mb-1">Heslo zaměstnance</label>
+        <input
+          type="text"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Zadejte nové heslo"
+          className="w-full px-4 py-3 bg-[#0A0D0B] border border-[#232A23] rounded-2xl text-white text-sm font-mono"
         />
       </div>
 

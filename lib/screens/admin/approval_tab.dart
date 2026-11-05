@@ -25,7 +25,7 @@ class _ApprovalTabState extends State<ApprovalTab> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Hromadně schválit vše?'),
+        title: const Text('Hromadně schválit vše?', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
         content: Text('Chystáte se jedním kliknutím schválit všech ${pendingEntries.length} čekajících směn.'),
         actions: [
           TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Zrušit')),
@@ -65,11 +65,12 @@ class _ApprovalTabState extends State<ApprovalTab> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Vrátit směnu k opravě'),
+        title: const Text('Vrátit směnu k opravě', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
         content: Form(
           key: formKey,
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Pracovník: ${entry.userName}'),
               Text('Zakázka: ${entry.projectName} (${entry.date})'),
@@ -78,7 +79,6 @@ class _ApprovalTabState extends State<ApprovalTab> {
                 controller: commentController,
                 decoration: const InputDecoration(
                   labelText: 'Důvod vrácení (komentář pro pracovníka) *',
-                  border: OutlineInputBorder(),
                 ),
                 maxLines: 3,
                 validator: (val) => val == null || val.trim().isEmpty ? 'Vyplňte prosím důvod' : null,
@@ -94,7 +94,10 @@ class _ApprovalTabState extends State<ApprovalTab> {
                 Navigator.of(ctx).pop(true);
               }
             },
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFFF5B65),
+              foregroundColor: Colors.white,
+            ),
             child: const Text('Vrátit směnu'),
           ),
         ],
@@ -116,19 +119,77 @@ class _ApprovalTabState extends State<ApprovalTab> {
 
   @override
   Widget build(BuildContext context) {
+    final monthKey = Formatters.toMonthKey(DateTime.now());
+
     return StreamBuilder<List<TimeEntry>>(
       stream: widget.firestoreService.streamAllEntries(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
         final allEntries = snapshot.data ?? [];
         final pendingEntries = allEntries.where((e) => e.isPending).toList();
+        final approvedMonth = allEntries.where((e) => e.isApproved && e.date.startsWith(monthKey)).toList();
+
+        double totalPayroll = 0;
+        double totalHours = 0;
+        for (final e in approvedMonth) {
+          totalPayroll += e.totalAmount;
+          totalHours += e.hoursWorked;
+        }
 
         return ListView(
           padding: const EdgeInsets.all(16.0),
           children: [
+            // HERO FINTECH PŘEHLED FIRMY
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: const Color(0xFF121513),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: const Color(0xFF232A23)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'SCHVÁLENÝ MZDOVÝ FOND (TENTO MĚSÍC)',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.0,
+                      color: Color(0xFF94A3B8),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    Formatters.formatKcz(totalPayroll),
+                    style: const TextStyle(
+                      fontSize: 30,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFFD4F73C),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Text(
+                        'Odpracováno: ${Formatters.formatHours(totalHours)}',
+                        style: const TextStyle(fontSize: 12, color: Colors.white),
+                      ),
+                      const SizedBox(width: 14),
+                      Text(
+                        'Ke schválení: ${pendingEntries.length}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: pendingEntries.isNotEmpty ? const Color(0xFFFF5B65) : const Color(0xFF94A3B8),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+
             // HLAVIČKA A HROMADNÉ SCHVÁLENÍ
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -138,45 +199,52 @@ class _ApprovalTabState extends State<ApprovalTab> {
                   children: [
                     const Text(
                       'Fronta ke schválení',
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.white),
                     ),
                     Text(
                       'Čeká: ${pendingEntries.length} směn',
-                      style: TextStyle(color: Colors.grey.shade600),
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
                     ),
                   ],
                 ),
                 if (pendingEntries.isNotEmpty)
                   FilledButton.icon(
                     onPressed: _isBatchProcessing ? null : () => _approveAll(pendingEntries),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: Colors.green.shade700,
-                    ),
                     icon: _isBatchProcessing
-                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Icon(Icons.done_all),
-                    label: const Text('Hromadně schválit vše'),
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF090B0A)),
+                          )
+                        : const Icon(Icons.done_all, size: 18),
+                    label: const Text('Schválit vše'),
                   ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
 
             if (pendingEntries.isEmpty)
               Container(
-                padding: const EdgeInsets.all(40),
+                padding: const EdgeInsets.all(36),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF121513),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFF232A23)),
+                ),
                 alignment: Alignment.center,
-                child: Column(
+                child: const Column(
                   children: [
-                    Icon(Icons.check_circle_outline, size: 64, color: Colors.green.shade300),
-                    const SizedBox(height: 12),
-                    const Text(
+                    Icon(Icons.check_circle_outline, size: 52, color: Color(0xFFD4F73C)),
+                    SizedBox(height: 12),
+                    Text(
                       'Vše je schváleno!',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                     ),
-                    const SizedBox(height: 4),
+                    SizedBox(height: 4),
                     Text(
                       'Aktuálně nečeká žádná směna na vaše schválení.',
-                      style: TextStyle(color: Colors.grey.shade600),
+                      style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                      textAlign: TextAlign.center,
                     ),
                   ],
                 ),
@@ -192,176 +260,153 @@ class _ApprovalTabState extends State<ApprovalTab> {
   Widget _buildPendingCard(TimeEntry entry) {
     final isOver12Hours = entry.hoursWorked > 12.0;
 
-    return Card(
+    return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(14.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Pracovník a datum
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
+      padding: const EdgeInsets.all(16.0),
+      decoration: BoxDecoration(
+        color: const Color(0xFF121513),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFF232A23)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
                   entry.userName,
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white),
                 ),
-                Text(
-                  Formatters.formatDateCz(entry.date),
-                  style: TextStyle(color: Colors.grey.shade700, fontWeight: FontWeight.w500),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Zakázka: ${entry.projectName}',
-              style: TextStyle(color: Colors.blueGrey.shade800, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Čas: ${Formatters.formatTimeFromIso(entry.startTime)} – ${entry.endTime != null ? Formatters.formatTimeFromIso(entry.endTime!) : "?"} (pauza ${entry.breakMinutes} min)',
-              style: TextStyle(color: Colors.grey.shade700),
-            ),
-            const SizedBox(height: 6),
-
-            // ANOMÁLIE DETEKCE: ŠTÍTKY
-            if (entry.isCustomRate || isOver12Hours) ...[
-              Wrap(
-                spacing: 8,
-                runSpacing: 4,
-                children: [
-                  if (entry.isCustomRate)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: Colors.amber.shade100,
-                        border: Border.all(color: Colors.amber.shade800),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.warning_amber_rounded, size: 14, color: Colors.amber.shade900),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Upravená sazba!',
-                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.amber.shade900),
-                          ),
-                        ],
-                      ),
-                    ),
-                  if (isOver12Hours)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: Colors.red.shade100,
-                        border: Border.all(color: Colors.red.shade800),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.timer_off_outlined, size: 14, color: Colors.red.shade900),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Směna přes 12 h!',
-                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.red.shade900),
-                          ),
-                        ],
-                      ),
-                    ),
-                ],
               ),
-              const SizedBox(height: 6),
-            ],
-
-            // Hodiny, sazba a částka
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  '${Formatters.formatHours(entry.hoursWorked)} × ${Formatters.formatKcz(entry.hourlyRate)}/h',
-                  style: const TextStyle(fontWeight: FontWeight.w500),
-                ),
-                Text(
-                  Formatters.formatKcz(entry.totalAmount),
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.green.shade800,
-                  ),
-                ),
-              ],
-            ),
-
-            if (entry.note.isNotEmpty) ...[
-              const SizedBox(height: 6),
               Text(
-                'Poznámka: ${entry.note}',
-                style: TextStyle(fontSize: 13, fontStyle: FontStyle.italic, color: Colors.grey.shade700),
+                Formatters.formatKcz(entry.totalAmount),
+                style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFFD4F73C),
+                ),
               ),
             ],
-
-            if (entry.startLocation != null || entry.endLocation != null) ...[
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  Icon(Icons.location_on, size: 14, color: Colors.blue.shade600),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      [
-                        if (entry.startLocation != null)
-                          'GPS Start: ${(entry.startLocation!['latitude'] as num).toStringAsFixed(4)}, ${(entry.startLocation!['longitude'] as num).toStringAsFixed(4)}',
-                        if (entry.endLocation != null)
-                          'GPS Konec: ${(entry.endLocation!['latitude'] as num).toStringAsFixed(4)}, ${(entry.endLocation!['longitude'] as num).toStringAsFixed(4)}',
-                      ].join(' | '),
-                      style: TextStyle(color: Colors.blue.shade800, fontSize: 12),
-                      overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Zakázka: ${entry.projectName}',
+            style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFFCBD5E1), fontSize: 13),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '${Formatters.formatDateCz(entry.date)} | ${Formatters.formatTimeFromIso(entry.startTime)} – ${Formatters.formatTimeFromIso(entry.endTime)} '
+            '(pauza ${entry.breakMinutes}m) = ${Formatters.formatHours(entry.hoursWorked)} @ ${entry.hourlyRate.toStringAsFixed(0)} Kč/h',
+            style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+          ),
+          if (entry.isCustomRate || isOver12Hours) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                if (entry.isCustomRate)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF59E0B).withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      'Upravená hodinová sazba',
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFF59E0B)),
                     ),
                   ),
-                ],
-              ),
-            ],
-
-            const Divider(height: 20),
-
-            // Tlačítka Schválit / Vrátit
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                OutlinedButton.icon(
-                  onPressed: () => _rejectWithComment(entry),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.red,
-                    side: const BorderSide(color: Colors.red),
+                if (isOver12Hours)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFF5B65).withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      'Směna delší než 12 hodin',
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFFF5B65)),
+                    ),
                   ),
-                  icon: const Icon(Icons.close, size: 16),
-                  label: const Text('Vrátit'),
-                ),
-                const SizedBox(width: 10),
-                FilledButton.icon(
-                  onPressed: () async {
-                    await widget.firestoreService.approveShift(
-                      entryId: entry.id,
-                      adminUid: widget.currentUser.id,
-                    );
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Směna byla schválena.')),
-                      );
-                    }
-                  },
-                  style: FilledButton.styleFrom(backgroundColor: Colors.green.shade700),
-                  icon: const Icon(Icons.check, size: 16),
-                  label: const Text('Schválit'),
-                ),
               ],
             ),
           ],
-        ),
+          if (entry.startLocation != null || entry.endLocation != null) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0A0D0B),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFF232A23)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (entry.startLocation != null)
+                    Text(
+                      'GPS Start: ${(entry.startLocation!['latitude'] as num?)?.toStringAsFixed(5)}, ${(entry.startLocation!['longitude'] as num?)?.toStringAsFixed(5)}',
+                      style: const TextStyle(fontSize: 11, color: Color(0xFFD4F73C)),
+                    ),
+                  if (entry.endLocation != null)
+                    Text(
+                      'GPS Konec: ${(entry.endLocation!['latitude'] as num?)?.toStringAsFixed(5)}, ${(entry.endLocation!['longitude'] as num?)?.toStringAsFixed(5)}',
+                      style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                    ),
+                ],
+              ),
+            ),
+          ],
+          if (entry.note.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0A0D0B),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                'Poznámka: ${entry.note}',
+                style: const TextStyle(fontSize: 12, color: Color(0xFFCBD5E1)),
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              OutlinedButton.icon(
+                onPressed: () => _rejectWithComment(entry),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFFFF5B65),
+                  side: const BorderSide(color: Color(0xFFFF5B65)),
+                ),
+                icon: const Icon(Icons.reply, size: 16),
+                label: const Text('Vrátit'),
+              ),
+              const SizedBox(width: 10),
+              FilledButton.icon(
+                onPressed: () async {
+                  await widget.firestoreService.approveShift(
+                    entryId: entry.id,
+                    adminUid: widget.currentUser.id,
+                  );
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Směna schválena.')),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.check, size: 16),
+                label: const Text('Schválit'),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

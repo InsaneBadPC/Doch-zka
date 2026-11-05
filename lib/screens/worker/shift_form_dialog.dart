@@ -233,13 +233,13 @@ class _ShiftFormDialogState extends State<ShiftFormDialog> {
                     padding: const EdgeInsets.all(10),
                     margin: const EdgeInsets.only(bottom: 12),
                     decoration: BoxDecoration(
-                      color: Colors.red.shade50,
+                      color: const Color(0xFFFF5B65).withOpacity(0.12),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.red.shade300),
+                      border: Border.all(color: const Color(0xFFFF5B65).withOpacity(0.4)),
                     ),
                     child: Text(
                       _errorMessage!,
-                      style: TextStyle(color: Colors.red.shade900, fontSize: 13),
+                      style: const TextStyle(color: Color(0xFFFF5B65), fontSize: 13),
                     ),
                   ),
                 ],
@@ -247,6 +247,7 @@ class _ShiftFormDialogState extends State<ShiftFormDialog> {
                 // Výběr zakázky
                 DropdownButtonFormField<String>(
                   value: availableProjects.any((p) => p.id == _selectedProjectId) ? _selectedProjectId : null,
+                  dropdownColor: const Color(0xFF121513),
                   decoration: const InputDecoration(
                     labelText: 'Zakázka *',
                     border: OutlineInputBorder(),
@@ -255,7 +256,7 @@ class _ShiftFormDialogState extends State<ShiftFormDialog> {
                   items: availableProjects.map((p) {
                     return DropdownMenuItem(
                       value: p.id,
-                      child: Text('${p.name} (${p.client})'),
+                      child: Text('${p.name} (${p.client})', overflow: TextOverflow.ellipsis),
                     );
                   }).toList(),
                   onChanged: (val) {
@@ -268,13 +269,13 @@ class _ShiftFormDialogState extends State<ShiftFormDialog> {
                 // Datum směny
                 ListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Datum směny:'),
+                  title: const Text('Datum směny:', style: TextStyle(color: Color(0xFF8A948E), fontSize: 13)),
                   subtitle: Text(
                     Formatters.formatDateCz(_selectedDate.toIso8601String().substring(0, 10)),
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
                   ),
                   trailing: IconButton(
-                    icon: const Icon(Icons.calendar_month),
+                    icon: const Icon(Icons.calendar_month, color: Color(0xFFD4F73C)),
                     onPressed: () async {
                       final picked = await showDatePicker(
                         context: context,
@@ -286,7 +287,7 @@ class _ShiftFormDialogState extends State<ShiftFormDialog> {
                     },
                   ),
                 ),
-                const Divider(),
+                const Divider(color: Colors.white12),
 
                 // Časy Od - Do
                 Row(
@@ -294,10 +295,10 @@ class _ShiftFormDialogState extends State<ShiftFormDialog> {
                     Expanded(
                       child: ListTile(
                         contentPadding: EdgeInsets.zero,
-                        title: const Text('Od (začátek):'),
+                        title: const Text('Od (začátek):', style: TextStyle(color: Color(0xFF8A948E), fontSize: 13)),
                         subtitle: Text(
                           _startTime.format(context),
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
                         ),
                         onTap: () async {
                           final picked = await showTimePicker(
@@ -311,10 +312,10 @@ class _ShiftFormDialogState extends State<ShiftFormDialog> {
                     Expanded(
                       child: ListTile(
                         contentPadding: EdgeInsets.zero,
-                        title: const Text('Do (konec):'),
+                        title: const Text('Do (konec):', style: TextStyle(color: Color(0xFF8A948E), fontSize: 13)),
                         subtitle: Text(
                           _endTime.format(context),
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
                         ),
                         onTap: () async {
                           final picked = await showTimePicker(
@@ -335,18 +336,18 @@ class _ShiftFormDialogState extends State<ShiftFormDialog> {
                     padding: const EdgeInsets.all(8),
                     margin: const EdgeInsets.only(bottom: 8),
                     decoration: BoxDecoration(
-                      color: Colors.amber.shade50,
+                      color: const Color(0xFFF59E0B).withOpacity(0.12),
                       borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: Colors.amber.shade300),
+                      border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.4)),
                     ),
                     child: const Row(
                       children: [
-                        Icon(Icons.nightlight_round, size: 16, color: Colors.orange),
+                        Icon(Icons.nightlight_round, size: 16, color: Color(0xFFF59E0B)),
                         SizedBox(width: 6),
                         Expanded(
                           child: Text(
                             'Noční směna: konec směny je automaticky započítán následující den (+1 den).',
-                            style: TextStyle(fontSize: 12),
+                            style: TextStyle(fontSize: 12, color: Color(0xFFF59E0B)),
                           ),
                         ),
                       ],
@@ -357,6 +358,7 @@ class _ShiftFormDialogState extends State<ShiftFormDialog> {
                 // Pauza (minuty)
                 DropdownButtonFormField<int>(
                   value: _breakMinutes,
+                  dropdownColor: const Color(0xFF121513),
                   decoration: const InputDecoration(
                     labelText: 'Pauza na jídlo / odpočinek',
                     border: OutlineInputBorder(),
@@ -412,8 +414,9 @@ class _ShiftFormDialogState extends State<ShiftFormDialog> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.blueGrey.shade50,
-                    borderRadius: BorderRadius.circular(8),
+                    color: const Color(0xFF0A0D0B),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.white12),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -421,23 +424,23 @@ class _ShiftFormDialogState extends State<ShiftFormDialog> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Čistý čas:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                          const Text('Čistý čas:', style: TextStyle(fontSize: 12, color: Color(0xFF8A948E))),
                           Text(
                             Formatters.formatHours(_calculatedHours),
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
                           ),
                         ],
                       ),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          const Text('Vychází výdělek:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                          const Text('Vychází výdělek:', style: TextStyle(fontSize: 12, color: Color(0xFF8A948E))),
                           Text(
                             Formatters.formatKcz(_calculatedTotalAmount),
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 16,
-                              color: Colors.green.shade800,
+                              color: Color(0xFFD4F73C),
                             ),
                           ),
                         ],

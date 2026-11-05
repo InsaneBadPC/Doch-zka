@@ -1,7 +1,7 @@
-import { Absence, AbsenceStatus, AppUser, Project, ProjectPhoto, ProjectStatus, TimeEntry } from '../types';
+import { Absence, AbsenceStatus, AppUser, GpsLocation, Project, ProjectPhoto, ProjectStatus, TimeEntry } from '../types';
 import { firestoreSyncService } from './firestoreService';
 
-const STORAGE_KEY_USERS = 'dochazka_users_v2';
+const STORAGE_KEY_USERS = 'dochazka_users_v3';
 const STORAGE_KEY_PROJECTS = 'dochazka_projects_v3';
 const STORAGE_KEY_ENTRIES = 'dochazka_entries_v3';
 const STORAGE_KEY_CURRENT_USER = 'dochazka_auth_user_v3';
@@ -11,9 +11,6 @@ const STORAGE_KEY_ABSENCES = 'dochazka_absences_v3';
 export const BOSS_NAME = 'Marek Dubina';
 export const BOSS_PASSWORD = 'MarekDubina4786';
 export const BOSS_EMAIL = 'marek.dubina@dochazka.cz';
-
-const OWNER_EMAIL = 'insanebad2@gmail.com';
-const OWNER_NAME = BOSS_NAME;
 
 const INITIAL_USERS: AppUser[] = [
   {
@@ -38,7 +35,16 @@ const INITIAL_USERS: AppUser[] = [
   },
 ];
 
-const INITIAL_PROJECTS: Project[] = [];
+const INITIAL_PROJECTS: Project[] = [
+  {
+    id: 'proj-default-main',
+    name: 'Hlavní provoz / Zakázka',
+    client: 'Firemní zakázky',
+    status: 'open',
+    budgetLimitKcz: 150000,
+    createdAt: new Date().toISOString(),
+  },
+];
 
 class StorageService {
   private listeners: (() => void)[] = [];
@@ -49,6 +55,64 @@ class StorageService {
 
   private initStorage() {
     try {
+      // Migrace uživatelů z v2, pokud v3 ještě neexistuje
+      const rawV3 = localStorage.getItem(STORAGE_KEY_USERS);
+      const rawV2 = localStorage.getItem('dochazka_users_v2');
+      let existingUsers: AppUser[] = [];
+      if (rawV3) {
+        existingUsers = JSON.parse(rawV3);
+      } else if (rawV2) {
+        existingUsers = JSON.parse(rawV2);
+      }
+
+      // Odstraníme starý placeholder účet 'user-owner', který dříve kolidoval s e-mailem Petra Lukeše
+      existingUsers = existingUsers.filter((u) => u.id !== 'user-owner');
+
+      // Garantujeme přítomnost Marka Dubiny (admin)
+      const bossIdx = existingUsers.findIndex(
+        (u) => u.id === 'user-boss-marek-dubina' || u.email.toLowerCase() === BOSS_EMAIL.toLowerCase()
+      );
+      if (bossIdx === -1) {
+        existingUsers.unshift({ ...INITIAL_USERS[0] });
+      } else {
+        existingUsers[bossIdx] = {
+          ...existingUsers[bossIdx],
+          id: 'user-boss-marek-dubina',
+          name: existingUsers[bossIdx].name || BOSS_NAME,
+          email: BOSS_EMAIL,
+          role: 'admin',
+          defaultHourlyRate: existingUsers[bossIdx].defaultHourlyRate || 350,
+          allowCustomRate: true,
+          active: true,
+          password: BOSS_PASSWORD,
+        };
+      }
+
+      // Garantujeme přítomnost Petra Lukeše (worker, 200 Kč/h)
+      const petrIdx = existingUsers.findIndex(
+        (u) => u.id === 'user-worker-petr-lukes' || u.email.toLowerCase() === 'insanebad2@gmail.com'
+      );
+      if (petrIdx === -1) {
+        existingUsers.push({ ...INITIAL_USERS[1] });
+      } else {
+        existingUsers[petrIdx] = {
+          ...existingUsers[petrIdx],
+          id: 'user-worker-petr-lukes',
+          name: existingUsers[petrIdx].name && existingUsers[petrIdx].name !== 'Správce docházky'
+            ? existingUsers[petrIdx].name
+            : 'Petr Lukeš',
+          email: 'insanebad2@gmail.com',
+          role: 'worker',
+          defaultHourlyRate: existingUsers[petrIdx].defaultHourlyRate === 350 ? 200 : (existingUsers[petrIdx].defaultHourlyRate || 200),
+          password: existingUsers[petrIdx].password || 'Heslo0897@',
+          active: existingUsers[petrIdx].active ?? true,
+        };
+      }
+
+      localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(existingUsers));
+
+      // Vyčištění zastaralých klíčů
+      localStorage.removeItem('dochazka_users_v2');
       localStorage.removeItem('dochazka_projects_v2');
       localStorage.removeItem('dochazka_entries_v2');
       localStorage.removeItem('dochazka_photos_v2');
@@ -57,29 +121,21 @@ class StorageService {
       localStorage.removeItem('dochazka_auth_user');
       localStorage.removeItem('dochazka_projects');
       localStorage.removeItem('dochazka_entries');
-    } catch {}
-
-    const rawUsers = localStorage.getItem(STORAGE_KEY_USERS);
-    if (!rawUsers) {
+    } catch {
       localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(INITIAL_USERS));
-    } else {
-      try {
-        const users: AppUser[] = JSON.parse(rawUsers);
-        const petrIndex = users.findIndex((u) => u.email.toLowerCase() === 'insanebad2@gmail.com');
-        if (petrIndex === -1) {
-          users.push(INITIAL_USERS[1]);
-        } else {
-          users[petrIndex].name = 'Petr Lukeš';
-          users[petrIndex].defaultHourlyRate = 200;
-          users[petrIndex].role = 'worker';
-          users[petrIndex].password = 'Heslo0897@';
-        }
-        localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(users));
-      } catch {}
     }
-    if (!localStorage.getItem(STORAGE_KEY_PROJECTS)) {
-      localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify([]));
+
+    // Zakázky – pokud je seznam prázdný, vložíme výchozí otevřenou zakázku, aby šly ihned spouštět směny
+    try {
+      const rawProjects = localStorage.getItem(STORAGE_KEY_PROJECTS);
+      const parsedProjects: Project[] = rawProjects ? JSON.parse(rawProjects) : [];
+      if (!Array.isArray(parsedProjects) || parsedProjects.length === 0) {
+        localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify(INITIAL_PROJECTS));
+      }
+    } catch {
+      localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify(INITIAL_PROJECTS));
     }
+
     if (!localStorage.getItem(STORAGE_KEY_ENTRIES)) {
       localStorage.setItem(STORAGE_KEY_ENTRIES, JSON.stringify([]));
     }
@@ -109,7 +165,9 @@ class StorageService {
     try {
       const u = JSON.parse(raw) as AppUser;
       const all = this.getUsers();
-      const fresh = all.find((x) => x.id === u.id);
+      const fresh = all.find(
+        (x) => x.id === u.id || (u.email && x.email.toLowerCase() === u.email.toLowerCase())
+      );
       return fresh || u;
     } catch {
       return null;
@@ -134,15 +192,15 @@ class StorageService {
     const users = this.getUsers();
     let boss = users.find(
       (u) =>
-        u.name.toLowerCase() === BOSS_NAME.toLowerCase() ||
+        u.id === 'user-boss-marek-dubina' ||
         u.email.toLowerCase() === BOSS_EMAIL.toLowerCase() ||
-        u.role === 'admin'
+        u.name.toLowerCase() === BOSS_NAME.toLowerCase()
     );
 
     if (!boss) {
       boss = {
         id: 'user-boss-marek-dubina',
-        name: (loginName && loginName.trim().length > 0) ? loginName.trim() : BOSS_NAME,
+        name: loginName && loginName.trim().length > 0 ? loginName.trim() : BOSS_NAME,
         email: BOSS_EMAIL,
         role: 'admin',
         defaultHourlyRate: 350,
@@ -163,6 +221,10 @@ class StorageService {
       this.updateUser(boss);
     }
 
+    try {
+      firestoreSyncService.saveUserToFirestore(boss);
+    } catch {}
+
     this.setCurrentUser(boss);
     return boss;
   }
@@ -170,28 +232,20 @@ class StorageService {
   login(identifier: string, password?: string): AppUser | null {
     const users = this.getUsers();
     const cleanId = identifier.trim().toLowerCase();
+    const cleanPass = password ? password.trim() : '';
 
     // Pokud se snaží přihlásit jako Marek Dubina
     if (cleanId === BOSS_NAME.toLowerCase() || cleanId === BOSS_EMAIL.toLowerCase()) {
-      return this.loginBoss(password || '', cleanId === BOSS_NAME.toLowerCase() ? BOSS_NAME : undefined);
+      return this.loginBoss(cleanPass, cleanId === BOSS_NAME.toLowerCase() ? BOSS_NAME : undefined);
     }
 
     let found = users.find(
       (u) => u.email.toLowerCase() === cleanId || u.name.toLowerCase() === cleanId
     );
 
-    // Pokud je to Petr Lukeš a v localStorage ještě nebyl načten
+    // Garantovaný účet Petra Lukeše
     if (!found && cleanId === 'insanebad2@gmail.com') {
-      found = {
-        id: 'user-worker-petr-lukes',
-        name: 'Petr Lukeš',
-        email: 'insanebad2@gmail.com',
-        role: 'worker',
-        defaultHourlyRate: 200,
-        allowCustomRate: false,
-        active: true,
-        password: 'Heslo0897@',
-      };
+      found = { ...INITIAL_USERS[1] };
       users.push(found);
       localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(users));
     }
@@ -200,16 +254,18 @@ class StorageService {
       return null;
     }
 
-    // Pokud uživatel má uložené heslo a heslo bylo zadáno, ověříme shodu
-    if (found.password && password && found.password !== password) {
+    if (found.password && cleanPass && found.password !== cleanPass) {
       throw new Error('Nesprávné heslo.');
     }
 
-    // Pokud je uživatel bez nastaveného hesla, nastavíme ho při prvním přihlášení
-    if (!found.password && password) {
-      found.password = password;
+    if (!found.password && cleanPass) {
+      found.password = cleanPass;
       this.updateUser(found);
     }
+
+    try {
+      firestoreSyncService.saveUserToFirestore(found);
+    } catch {}
 
     this.setCurrentUser(found);
     return found;
@@ -229,21 +285,22 @@ class StorageService {
       throw new Error('Uživatel s tímto e-mailem již v systému existuje.');
     }
 
-    const isOwner = cleanEmail === OWNER_EMAIL.toLowerCase();
-
     const newUser: AppUser = {
       id: 'usr-' + Date.now(),
       name: name.trim(),
       email: cleanEmail,
-      role: isOwner ? 'admin' : 'worker', // Nově registrovaní uživatelé jsou vždy 'worker', pouze systémový vlastník je 'admin'
+      role,
       defaultHourlyRate: rate,
-      allowCustomRate: isOwner,
+      allowCustomRate: role === 'admin',
       active: true,
-      password: password || undefined,
+      password: password ? password.trim() : undefined,
     };
 
     users.push(newUser);
     localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(users));
+    try {
+      firestoreSyncService.saveUserToFirestore(newUser);
+    } catch {}
     this.setCurrentUser(newUser);
     this.notify();
     return newUser;
@@ -252,11 +309,12 @@ class StorageService {
   // --- Users ---
   getUsers(): AppUser[] {
     const raw = localStorage.getItem(STORAGE_KEY_USERS);
-    if (!raw) return [];
+    if (!raw) return [...INITIAL_USERS];
     try {
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) && parsed.length > 0 ? parsed : [...INITIAL_USERS];
     } catch {
-      return [];
+      return [...INITIAL_USERS];
     }
   }
 
@@ -268,10 +326,20 @@ class StorageService {
     if (cur && cur.id === updated.id) {
       localStorage.setItem(STORAGE_KEY_CURRENT_USER, JSON.stringify(updated));
     }
+    try {
+      firestoreSyncService.saveUserToFirestore(updated);
+    } catch {}
     this.notify();
   }
 
-  addUser(name: string, email: string, role: 'worker' | 'admin', rate: number, allowCustom: boolean): AppUser {
+  addUser(
+    name: string,
+    email: string,
+    role: 'worker' | 'admin',
+    rate: number,
+    allowCustom: boolean,
+    password?: string
+  ): AppUser {
     const users = this.getUsers();
     const cleanEmail = email.trim().toLowerCase();
     if (users.some((u) => u.email.toLowerCase() === cleanEmail)) {
@@ -285,9 +353,13 @@ class StorageService {
       defaultHourlyRate: rate,
       allowCustomRate: allowCustom,
       active: true,
+      password: password && password.trim().length > 0 ? password.trim() : undefined,
     };
     users.push(newUser);
     localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(users));
+    try {
+      firestoreSyncService.saveUserToFirestore(newUser);
+    } catch {}
     this.notify();
     return newUser;
   }
@@ -295,17 +367,21 @@ class StorageService {
   deleteUser(userId: string) {
     const users = this.getUsers().filter((u) => u.id !== userId);
     localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(users));
+    try {
+      firestoreSyncService.deleteUserFromFirestore(userId);
+    } catch {}
     this.notify();
   }
 
   // --- Projects ---
   getProjects(): Project[] {
     const raw = localStorage.getItem(STORAGE_KEY_PROJECTS);
-    if (!raw) return [];
+    if (!raw) return [...INITIAL_PROJECTS];
     try {
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) && parsed.length > 0 ? parsed : [...INITIAL_PROJECTS];
     } catch {
-      return [];
+      return [...INITIAL_PROJECTS];
     }
   }
 
@@ -321,6 +397,9 @@ class StorageService {
     };
     projects.push(newProj);
     localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify(projects));
+    try {
+      firestoreSyncService.saveProjectToFirestore(newProj);
+    } catch {}
     this.notify();
     return newProj;
   }
@@ -328,14 +407,21 @@ class StorageService {
   toggleProjectStatus(projectId: string): ProjectStatus {
     const projects = this.getProjects();
     let nextStatus: ProjectStatus = 'closed';
+    let targetProj: Project | null = null;
     const updated = projects.map((p) => {
       if (p.id === projectId) {
         nextStatus = p.status === 'open' ? 'closed' : 'open';
-        return { ...p, status: nextStatus };
+        targetProj = { ...p, status: nextStatus };
+        return targetProj;
       }
       return p;
     });
     localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify(updated));
+    if (targetProj) {
+      try {
+        firestoreSyncService.saveProjectToFirestore(targetProj);
+      } catch {}
+    }
     this.notify();
     return nextStatus;
   }
@@ -343,6 +429,9 @@ class StorageService {
   deleteProject(projectId: string) {
     const projects = this.getProjects().filter((p) => p.id !== projectId);
     localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify(projects));
+    try {
+      firestoreSyncService.deleteProjectFromFirestore(projectId);
+    } catch {}
     this.notify();
   }
 
@@ -404,9 +493,7 @@ class StorageService {
     this.notify();
     try {
       firestoreSyncService.saveTimeEntryToFirestore(newEntry);
-    } catch {
-      // offline fallback
-    }
+    } catch {}
     return newEntry;
   }
 
@@ -420,9 +507,7 @@ class StorageService {
     this.notify();
     try {
       firestoreSyncService.saveTimeEntryToFirestore(entry);
-    } catch {
-      // offline fallback
-    }
+    } catch {}
   }
 
   stopLiveShift(
@@ -462,9 +547,7 @@ class StorageService {
     this.notify();
     try {
       firestoreSyncService.saveTimeEntryToFirestore(entry);
-    } catch {
-      // offline fallback
-    }
+    } catch {}
   }
 
   createManualShift(entry: Omit<TimeEntry, 'id'>): TimeEntry {
@@ -478,21 +561,25 @@ class StorageService {
     this.notify();
     try {
       firestoreSyncService.saveTimeEntryToFirestore(newEntry);
-    } catch {
-      // offline fallback
-    }
+    } catch {}
     return newEntry;
   }
 
   updateShift(updated: TimeEntry) {
     const entries = this.getTimeEntries().map((e) => (e.id === updated.id ? updated : e));
     localStorage.setItem(STORAGE_KEY_ENTRIES, JSON.stringify(entries));
+    try {
+      firestoreSyncService.saveTimeEntryToFirestore(updated);
+    } catch {}
     this.notify();
   }
 
   deleteShift(entryId: string) {
     const entries = this.getTimeEntries().filter((e) => e.id !== entryId);
     localStorage.setItem(STORAGE_KEY_ENTRIES, JSON.stringify(entries));
+    try {
+      firestoreSyncService.deleteTimeEntryFromFirestore(entryId);
+    } catch {}
     this.notify();
   }
 
@@ -502,6 +589,9 @@ class StorageService {
     if (entry) {
       entry.status = 'pending';
       localStorage.setItem(STORAGE_KEY_ENTRIES, JSON.stringify(entries));
+      try {
+        firestoreSyncService.saveTimeEntryToFirestore(entry);
+      } catch {}
       this.notify();
     }
   }
@@ -514,6 +604,9 @@ class StorageService {
       entry.approvedBy = adminId;
       entry.approvedAt = new Date().toISOString();
       localStorage.setItem(STORAGE_KEY_ENTRIES, JSON.stringify(entries));
+      try {
+        firestoreSyncService.saveTimeEntryToFirestore(entry);
+      } catch {}
       this.notify();
     }
   }
@@ -525,6 +618,9 @@ class StorageService {
       entry.status = 'rejected';
       entry.adminComment = comment.trim();
       localStorage.setItem(STORAGE_KEY_ENTRIES, JSON.stringify(entries));
+      try {
+        firestoreSyncService.saveTimeEntryToFirestore(entry);
+      } catch {}
       this.notify();
     }
   }
@@ -541,6 +637,9 @@ class StorageService {
         e.approvedBy = adminId;
         e.approvedAt = nowIso;
         count++;
+        try {
+          firestoreSyncService.saveTimeEntryToFirestore(e);
+        } catch {}
       }
     }
     localStorage.setItem(STORAGE_KEY_ENTRIES, JSON.stringify(entries));
@@ -553,29 +652,28 @@ class StorageService {
     this.notify();
   }
 
-  // Pomocná funkce pro šéfa k vygenerování reprezentativních dat pro grafy a rozpočty
   seedChartAnalyticsData() {
     const users = this.getUsers();
     const projects = this.getProjects();
     if (projects.length === 0) return;
 
+    const workerUser = users.find((u) => u.role === 'worker') || users[0];
     const sampleEntries: TimeEntry[] = [];
     const today = new Date();
 
-    // Vytvoříme 10 směn v průběhu posledních 7 dnů
     for (let i = 6; i >= 0; i--) {
       const d = new Date(today);
       d.setDate(today.getDate() - i);
       const dateStr = d.toISOString().substring(0, 10);
       const proj = projects[i % projects.length];
       const hours = 6.5 + (i % 3) * 1.5;
-      const rate = 300;
+      const rate = workerUser?.defaultHourlyRate || 200;
       const total = Math.round(hours * rate);
 
       sampleEntries.push({
         id: 'seed-ent-' + i,
-        userId: users[0]?.id || 'user-owner',
-        userName: users[0]?.name || 'Pracovník',
+        userId: workerUser?.id || 'user-worker-petr-lukes',
+        userName: workerUser?.name || 'Petr Lukeš',
         projectId: proj.id,
         projectName: proj.name,
         date: dateStr,
@@ -590,7 +688,7 @@ class StorageService {
         status: i === 0 ? 'pending' : 'approved',
         isRunning: false,
         adminComment: '',
-        approvedBy: i === 0 ? null : 'user-owner',
+        approvedBy: i === 0 ? null : 'user-boss-marek-dubina',
         approvedAt: i === 0 ? null : new Date().toISOString(),
       });
     }
@@ -599,7 +697,7 @@ class StorageService {
     this.notify();
   }
 
-  // --- Project Photos (Spark Free Plan compliant, compressed Base64) ---
+  // --- Project Photos ---
   getProjectPhotos(projectId?: string): ProjectPhoto[] {
     const raw = localStorage.getItem(STORAGE_KEY_PHOTOS);
     if (!raw) return [];
@@ -635,7 +733,6 @@ class StorageService {
     this.notify();
   }
 
-  // Komprese obrázku přes HTML5 Canvas do JPEG s max rozměrem 800px a kvalitou 0.7 (~25-45 KB)
   async compressImage(file: File, maxWidth = 800, quality = 0.7): Promise<string> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -672,7 +769,7 @@ class StorageService {
     });
   }
 
-  // --- Absences / Kalendář absencí a žádostí o volno ---
+  // --- Absences ---
   getAbsences(userId?: string): Absence[] {
     const raw = localStorage.getItem(STORAGE_KEY_ABSENCES);
     if (!raw) return [];

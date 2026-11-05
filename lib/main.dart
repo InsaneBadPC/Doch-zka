@@ -9,13 +9,11 @@ import 'screens/role_router.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Inicializace Firebase
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
 
-    // Aktivace offline perzistence Firestore dle zadání
     final dbInstance = FirebaseFirestore.instanceFor(
       app: Firebase.app(),
       databaseId: 'ai-studio-firemndochzkaaev-cf66a2c8-383c-4be5-bade-042d1600b80c',
@@ -28,8 +26,8 @@ void main() async {
     debugPrint('Upozornění při inicializaci Firebase / offline cache: $e');
   }
 
-  final authService = AuthService();
   final firestoreService = FirestoreService();
+  final authService = AuthService();
 
   runApp(DochazkaApp(
     authService: authService,
@@ -49,28 +47,96 @@ class DochazkaApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final darkFintechTheme = ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.dark,
+      scaffoldBackgroundColor: const Color(0xFF090B0A),
+      colorScheme: const ColorScheme.dark(
+        primary: Color(0xFFD4F73C),
+        onPrimary: Color(0xFF090B0A),
+        secondary: Color(0xFFF59E0B),
+        onSecondary: Color(0xFF090B0A),
+        surface: Color(0xFF121513),
+        onSurface: Colors.white,
+        error: Color(0xFFFF5B65),
+      ),
+      cardTheme: CardThemeData(
+        color: const Color(0xFF121513),
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: Color(0xFF232A23)),
+        ),
+      ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Color(0xFF090B0A),
+        foregroundColor: Colors.white,
+        centerTitle: false,
+        elevation: 0,
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: const Color(0xFF121513),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: const BorderSide(color: Color(0xFF232A23)),
+        ),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: const Color(0xFF121513),
+        indicatorColor: const Color(0xFFD4F73C).withOpacity(0.2),
+        iconTheme: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return const IconThemeData(color: Color(0xFFD4F73C));
+          }
+          return const IconThemeData(color: Color(0xFF8E929E));
+        }),
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFFD4F73C),
+            );
+          }
+          return const TextStyle(
+            fontSize: 12,
+            color: Color(0xFF8E929E),
+          );
+        }),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: const Color(0xFFD4F73C),
+          foregroundColor: const Color(0xFF090B0A),
+          textStyle: const TextStyle(fontWeight: FontWeight.w800),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: const Color(0xFF0A0D0B),
+        labelStyle: const TextStyle(color: Color(0xFF94A3B8)),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Color(0xFF232A23)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Color(0xFFD4F73C), width: 1.5),
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Color(0xFF232A23)),
+        ),
+      ),
+    );
+
     return MaterialApp(
       title: 'Firemní Docházka',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF1E293B),
-          brightness: Brightness.light,
-        ),
-        appBarTheme: const AppBarTheme(
-          centerTitle: false,
-          elevation: 0,
-        ),
-      ),
-      darkTheme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF1E293B),
-          brightness: Brightness.dark,
-        ),
-      ),
-      themeMode: ThemeMode.system,
+      theme: darkFintechTheme,
+      darkTheme: darkFintechTheme,
+      themeMode: ThemeMode.dark,
       home: RoleRouter(
         authService: authService,
         firestoreService: firestoreService,

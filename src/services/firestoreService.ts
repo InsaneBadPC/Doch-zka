@@ -2,14 +2,9 @@ import {
   collection,
   doc,
   setDoc,
-  getDoc,
-  getDocs,
   getDocFromServer,
   onSnapshot,
   deleteDoc,
-  query,
-  where,
-  orderBy,
 } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { Absence, AppUser, Project, ProjectPhoto, TimeEntry } from '../types';
@@ -67,7 +62,6 @@ export function handleFirestoreError(
   throw new Error(JSON.stringify(errInfo));
 }
 
-// Otestování spojení se serverem při startu aplikace (dle Firebase Skill)
 export async function testFirestoreConnection(): Promise<boolean> {
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
@@ -84,10 +78,40 @@ class FirestoreSyncService {
   private isListening = false;
   private unsubscribeFns: (() => void)[] = [];
 
-  // Inicializace obousměrné synchronizace mezi Firestore a aplikací
   initRealtimeSync() {
     if (this.isListening) return;
     this.isListening = true;
+
+    // 0. Synchronizace Uživatelů
+    try {
+      const usersUnsub = onSnapshot(
+        collection(db, 'users'),
+        (snapshot) => {
+          const remoteUsers: AppUser[] = [];
+          snapshot.forEach((d) => {
+            remoteUsers.push({ id: d.id, ...d.data() } as AppUser);
+          });
+
+          if (remoteUsers.length > 0) {
+            const local = storageService.getUsers();
+            const localMap = new Map(local.map((u) => [u.id, u]));
+            remoteUsers.forEach((r) => {
+              const existing = localMap.get(r.id);
+              localMap.set(r.id, { ...existing, ...r, password: r.password || existing?.password });
+            });
+            const merged = Array.from(localMap.values());
+            localStorage.setItem('dochazka_users_v3', JSON.stringify(merged));
+            storageService.notify();
+          }
+        },
+        (error) => {
+          console.warn('Realtime sync users note:', error.message);
+        }
+      );
+      this.unsubscribeFns.push(usersUnsub);
+    } catch (e) {
+      console.warn('Could not attach users listener:', e);
+    }
 
     // 1. Synchronizace Absencí / Žádostí o volno
     try {
@@ -211,9 +235,25 @@ class FirestoreSyncService {
     }
   }
 
+  // --- Users Firestore Mutations ---
+  async saveUserToFirestore(user: AppUser): Promise<void> {
+    try {
+      await setDoc(doc(db, 'users', user.id), user, { merge: true });
+    } catch (error) {
+      console.warn('Could not save user to Firestore:', error);
+    }
+  }
+
+  async deleteUserFromFirestore(userId: string): Promise<void> {
+    try {
+      await deleteDoc(doc(db, 'users', userId));
+    } catch (error) {
+      console.warn('Could not delete user from Firestore:', error);
+    }
+  }
+
   // --- Absences Firestore Mutations ---
   async saveAbsenceToFirestore(absence: Absence): Promise<void> {
-    const path = `absences/${absence.id}`;
     try {
       await setDoc(doc(db, 'absences', absence.id), absence, { merge: true });
     } catch (error) {
@@ -222,7 +262,6 @@ class FirestoreSyncService {
   }
 
   async deleteAbsenceFromFirestore(absenceId: string): Promise<void> {
-    const path = `absences/${absenceId}`;
     try {
       await deleteDoc(doc(db, 'absences', absenceId));
     } catch (error) {
@@ -232,7 +271,6 @@ class FirestoreSyncService {
 
   // --- Project Photos Firestore Mutations ---
   async saveProjectPhotoToFirestore(photo: ProjectPhoto): Promise<void> {
-    const path = `project_photos/${photo.id}`;
     try {
       await setDoc(doc(db, 'project_photos', photo.id), photo, { merge: true });
     } catch (error) {
@@ -241,7 +279,6 @@ class FirestoreSyncService {
   }
 
   async deleteProjectPhotoFromFirestore(photoId: string): Promise<void> {
-    const path = `project_photos/${photoId}`;
     try {
       await deleteDoc(doc(db, 'project_photos', photoId));
     } catch (error) {
@@ -251,7 +288,6 @@ class FirestoreSyncService {
 
   // --- Projects Firestore Mutations ---
   async saveProjectToFirestore(project: Project): Promise<void> {
-    const path = `projects/${project.id}`;
     try {
       await setDoc(doc(db, 'projects', project.id), project, { merge: true });
     } catch (error) {
@@ -259,9 +295,16 @@ class FirestoreSyncService {
     }
   }
 
+  async deleteProjectFromFirestore(projectId: string): Promise<void> {
+    try {
+      await deleteDoc(doc(db, 'projects', projectId));
+    } catch (error) {
+      console.warn('Could not delete project from Firestore:', error);
+    }
+  }
+
   // --- Time Entries Firestore Mutations ---
   async saveTimeEntryToFirestore(entry: TimeEntry): Promise<void> {
-    const path = `time_entries/${entry.id}`;
     try {
       await setDoc(doc(db, 'time_entries', entry.id), entry, { merge: true });
     } catch (error) {
@@ -270,7 +313,6 @@ class FirestoreSyncService {
   }
 
   async deleteTimeEntryFromFirestore(entryId: string): Promise<void> {
-    const path = `time_entries/${entryId}`;
     try {
       await deleteDoc(doc(db, 'time_entries', entryId));
     } catch (error) {

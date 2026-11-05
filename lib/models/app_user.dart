@@ -6,6 +6,7 @@ class AppUser {
   final double defaultHourlyRate;
   final bool allowCustomRate;
   final bool active;
+  final String? password;
 
   AppUser({
     required this.id,
@@ -15,6 +16,7 @@ class AppUser {
     this.defaultHourlyRate = 250.0,
     this.allowCustomRate = false,
     this.active = true,
+    this.password,
   });
 
   bool get isAdmin => role == 'admin';
@@ -29,17 +31,20 @@ class AppUser {
       defaultHourlyRate: (data['defaultHourlyRate'] as num?)?.toDouble() ?? 250.0,
       allowCustomRate: data['allowCustomRate'] as bool? ?? false,
       active: data['active'] as bool? ?? true,
+      password: data['password'] as String?,
     );
   }
 
   Map<String, dynamic> toMap() {
     return {
+      'id': id,
       'name': name,
       'email': email,
       'role': role,
       'defaultHourlyRate': defaultHourlyRate,
       'allowCustomRate': allowCustomRate,
       'active': active,
+      if (password != null && password!.isNotEmpty) 'password': password,
     };
   }
 
@@ -50,6 +55,7 @@ class AppUser {
     double? defaultHourlyRate,
     bool? allowCustomRate,
     bool? active,
+    String? password,
   }) {
     return AppUser(
       id: id,
@@ -59,6 +65,7 @@ class AppUser {
       defaultHourlyRate: defaultHourlyRate ?? this.defaultHourlyRate,
       allowCustomRate: allowCustomRate ?? this.allowCustomRate,
       active: active ?? this.active,
+      password: password ?? this.password,
     );
   }
 }
