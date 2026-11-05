@@ -383,10 +383,6 @@ class StorageService {
     }
     return newEntry;
   }
-    localStorage.setItem(STORAGE_KEY_ENTRIES, JSON.stringify(entries));
-    this.notify();
-    return newEntry;
-  }
 
   updateShift(updated: TimeEntry) {
     const entries = this.getTimeEntries().map((e) => (e.id === updated.id ? updated : e));

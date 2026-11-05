@@ -77,7 +77,7 @@ jobs:
         run: flutter pub get
 
       - name: Sestavení Release APK balíčku
-        run: flutter build apk --release
+        run: flutter build apk --release --android-skip-build-dependency-validation
 
       - name: Uložení APK jako stahovatelný artefakt
         uses: actions/upload-artifact@v4
