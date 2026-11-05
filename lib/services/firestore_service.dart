@@ -4,7 +4,10 @@ import '../models/project_model.dart';
 import '../models/time_entry.dart';
 
 class FirestoreService {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instanceFor(
+    app: Firebase.app(),
+    databaseId: 'ai-studio-firemndochzkaaev-cf66a2c8-383c-4be5-bade-042d1600b80c',
+  );
 
   // Kolekce
   CollectionReference<Map<String, dynamic>> get _usersCol =>

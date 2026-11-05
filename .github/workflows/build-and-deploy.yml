@@ -32,7 +32,7 @@ jobs:
           cache: 'npm'
 
       - name: Instalace npm závislostí
-        run: npm install
+        run: npm install --legacy-peer-deps
 
       - name: Sestavení produkční webové aplikace (Vite)
         run: npm run build
@@ -68,6 +68,11 @@ jobs:
           channel: 'stable'
           cache: true
 
+      - name: Příprava a oprava Android struktury
+        run: |
+          flutter config --no-analytics
+          flutter create . --platforms=android --org cz.dochazka
+
       - name: Stažení Flutter balíčků
         run: flutter pub get
 
@@ -93,5 +98,6 @@ jobs:
             - 📱 **Android APK**: Stáhněte soubor `app-release.apk` níže a nainstalujte do mobilu.
             - 🌐 **Web & iOS PWA**: Běží online přes GitHub Pages.
           files: build/app/outputs/flutter-apk/app-release.apk
+          make_latest: true
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_PAT != '' && secrets.GH_PAT || secrets.GITHUB_TOKEN }}

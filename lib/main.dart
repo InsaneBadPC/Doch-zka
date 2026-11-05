@@ -16,7 +16,11 @@ void main() async {
     );
 
     // Aktivace offline perzistence Firestore dle zadání
-    FirebaseFirestore.instance.settings = const Settings(
+    final dbInstance = FirebaseFirestore.instanceFor(
+      app: Firebase.app(),
+      databaseId: 'ai-studio-firemndochzkaaev-cf66a2c8-383c-4be5-bade-042d1600b80c',
+    );
+    dbInstance.settings = const Settings(
       persistenceEnabled: true,
       cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
     );
