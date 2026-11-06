@@ -213,16 +213,25 @@ class _ApprovalTabState extends State<ApprovalTab> {
       DateTime e = DateTime(startDt.year, startDt.month, startDt.day, endTod.hour, endTod.minute);
       if (e.isBefore(s)) e = e.add(const Duration(days: 1));
       final rate = double.tryParse(rateCtrl.text) ?? entry.hourlyRate;
+      final netMin = (e.difference(s).inMinutes - breakMinutes).clamp(0, 24 * 60);
+      final hrs = double.parse((netMin / 60.0).toStringAsFixed(2));
+      final total = double.parse((hrs * rate).toStringAsFixed(2));
+
+      final updatedEntry = entry.copyWith(
+        projectId: selectedProject.id,
+        projectName: selectedProject.name,
+        date: Formatters.toDateKey(s),
+        startTime: s.toIso8601String(),
+        endTime: e.toIso8601String(),
+        breakMinutes: breakMinutes,
+        hoursWorked: hrs,
+        hourlyRate: rate,
+        totalAmount: total,
+        note: noteCtrl.text.trim(),
+      );
 
       await widget.firestoreService.adminUpdateShift(
-        existingEntry: entry,
-        project: selectedProject,
-        date: s,
-        startTime: s,
-        endTime: e,
-        breakMinutes: breakMinutes,
-        hourlyRate: rate,
-        note: noteCtrl.text,
+        updatedEntry,
         approveImmediately: true,
         adminUid: widget.currentUser.id,
       );

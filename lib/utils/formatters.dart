@@ -85,6 +85,11 @@ class Formatters {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}';
   }
 
+  /// Získání klíče dne YYYY-MM-DD
+  static String toDateKey(DateTime date) {
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
+
   /// Zobrazení měsíce v záhlaví (např. Listopad 2026)
   static String formatMonthDisplay(DateTime date) {
     final idx = (date.month - 1).clamp(0, 11);

@@ -10,19 +10,23 @@ class DayTimelineWidget extends StatelessWidget {
   const DayTimelineWidget({
     super.key,
     required this.entries,
-    required this.currentDateStr,
+    this.currentDateStr = '',
     this.runningEntry,
   });
 
   @override
   Widget build(BuildContext context) {
-    final todayEntries = entries.where((e) => e.date == currentDateStr && !e.isRunning).toList();
+    final activeDateStr = currentDateStr.isNotEmpty
+        ? currentDateStr
+        : Formatters.toDateKey(DateTime.now());
+    final liveEntry = runningEntry ?? entries.where((e) => e.isRunning).firstOrNull;
+    final todayEntries = entries.where((e) => e.date == activeDateStr && !e.isRunning).toList();
     double totalHoursToday = 0;
     for (final e in todayEntries) {
       totalHoursToday += e.hoursWorked;
     }
-    if (runningEntry != null && runningEntry!.date == currentDateStr) {
-      final start = DateTime.tryParse(runningEntry!.startTime);
+    if (liveEntry != null && liveEntry.date == activeDateStr) {
+      final start = DateTime.tryParse(liveEntry.startTime);
       if (start != null) {
         final sec = DateTime.now().difference(start).inSeconds.clamp(0, 86400);
         totalHoursToday += sec / 3600.0;
@@ -47,7 +51,7 @@ class DayTimelineWidget extends StatelessWidget {
                   const Icon(Icons.timeline, size: 16, color: Color(0xFFD4F73C)),
                   const SizedBox(width: 6),
                   Text(
-                    'DNEŠNÍ ČASOVÁ OSA (${Formatters.formatDateCz(currentDateStr)})',
+                    'DNEŠNÍ ČASOVÁ OSA (${Formatters.formatDateCz(activeDateStr)})',
                     style: const TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w800,
@@ -94,8 +98,8 @@ class DayTimelineWidget extends StatelessWidget {
                         // Odpracované směny dnes
                         ...todayEntries.map((entry) => _buildSegment(entry, width, false)),
                         // Právě běžící směna
-                        if (runningEntry != null && runningEntry!.date == currentDateStr)
-                          _buildSegment(runningEntry!, width, true),
+                        if (liveEntry != null && liveEntry.date == activeDateStr)
+                          _buildSegment(liveEntry, width, true),
                       ],
                     ),
                   ),
