@@ -31,7 +31,8 @@ class Formatters {
   }
 
   /// Formátování ISO času do HH:mm
-  static String formatTimeFromIso(String isoString) {
+  static String formatTimeFromIso(String? isoString) {
+    if (isoString == null || isoString.isEmpty) return '';
     try {
       final dt = DateTime.parse(isoString);
       return _timeFormat.format(dt);

@@ -297,7 +297,7 @@ class _ApprovalTabState extends State<ApprovalTab> {
           ),
           const SizedBox(height: 4),
           Text(
-            '${Formatters.formatDateCz(entry.date)} | ${Formatters.formatTimeFromIso(entry.startTime)} – ${Formatters.formatTimeFromIso(entry.endTime)} '
+            '${Formatters.formatDateCz(entry.date)} | ${Formatters.formatTimeFromIso(entry.startTime)} – ${Formatters.formatTimeFromIso(entry.endTime ?? '')} '
             '(pauza ${entry.breakMinutes}m) = ${Formatters.formatHours(entry.hoursWorked)} @ ${entry.hourlyRate.toStringAsFixed(0)} Kč/h',
             style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
           ),

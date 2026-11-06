@@ -442,14 +442,22 @@ export const AuthScreen: React.FC = () => {
         </div>
 
         {/* Spodní lišta se sdílením / stažením APK */}
-        <div className="pt-2 text-center">
+        <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
+          <a
+            href="https://github.com/InsaneBadPC/Doch-zka/releases/latest/download/app-release.apk"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#1C251C] hover:bg-[#D4F73C] text-[#D4F73C] hover:text-[#090B0A] border border-[#2B392B] text-xs font-extrabold transition cursor-pointer"
+          >
+            <span>Stáhnout Android APK</span>
+          </a>
           <button
             type="button"
             onClick={() => setIsShareModalOpen(true)}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#121513] hover:bg-[#1A221A] text-slate-400 hover:text-[#D4F73C] border border-[#232A23] text-xs font-mono transition cursor-pointer"
           >
             <Share2 className="w-3.5 h-3.5" />
-            <span>Sdílet aplikaci / Stáhnout Android APK</span>
+            <span>Sdílet aplikaci</span>
           </button>
         </div>
       </div>

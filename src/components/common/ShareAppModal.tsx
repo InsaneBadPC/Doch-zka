@@ -152,16 +152,19 @@ export const ShareAppModal: React.FC<ShareAppModalProps> = ({ isOpen, onClose })
           </p>
 
           <div className="flex items-center gap-2 pt-1">
-            <input
-              type="text"
-              readOnly
-              value={apkDownloadUrl}
-              className="flex-1 px-3.5 py-2 bg-[#121513] border border-[#232A23] rounded-xl text-xs text-slate-300 font-mono focus:outline-none select-all truncate"
-            />
+            <a
+              href={apkDownloadUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-1 py-2.5 px-4 bg-[#D4F73C] hover:bg-[#c4e92a] text-[#090B0A] font-extrabold rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-md shadow-[#D4F73C]/20"
+            >
+              <Download className="w-4 h-4 stroke-[2.5]" />
+              <span>Stáhnout nejnovější APK</span>
+            </a>
             <button
               type="button"
               onClick={() => handleCopy(apkDownloadUrl, 'apk')}
-              className="px-3.5 py-2 bg-[#1C251C] hover:bg-[#D4F73C] text-[#D4F73C] hover:text-black font-bold rounded-xl text-xs transition border border-[#2E3C2E] flex items-center gap-1.5 shrink-0"
+              className="px-3.5 py-2.5 bg-[#1C251C] hover:bg-[#D4F73C] text-[#D4F73C] hover:text-black font-bold rounded-xl text-xs transition border border-[#2E3C2E] flex items-center gap-1.5 shrink-0"
             >
               {copiedType === 'apk' ? (
                 <>
@@ -169,7 +172,7 @@ export const ShareAppModal: React.FC<ShareAppModalProps> = ({ isOpen, onClose })
                 </>
               ) : (
                 <>
-                  <Copy className="w-3.5 h-3.5" /> Kopírovat
+                  <Copy className="w-3.5 h-3.5" /> Kopírovat odkaz
                 </>
               )}
             </button>
