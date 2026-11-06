@@ -9,6 +9,28 @@ import 'screens/role_router.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Zabráníme bílé obrazovce v Release módu při jakékoliv neočekávané chybě widgetu
+  ErrorWidget.builder = (FlutterErrorDetails details) {
+    return Material(
+      color: const Color(0xFF090B0A),
+      child: Center(
+        child: Container(
+          margin: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFF121513),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFFF5B65).withOpacity(0.5)),
+          ),
+          child: Text(
+            'Chyba zobrazení: ${details.exceptionAsString()}',
+            style: const TextStyle(color: Color(0xFFFF5B65), fontSize: 12),
+          ),
+        ),
+      ),
+    );
+  };
+
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,

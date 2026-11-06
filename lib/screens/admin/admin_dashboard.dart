@@ -83,6 +83,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
     return StreamBuilder<List<TimeEntry>>(
       stream: widget.firestoreService.streamAllEntries(),
+      initialData: widget.firestoreService.getAllEntriesSync(),
       builder: (context, snapshot) {
         final allEntries = snapshot.data ?? [];
         final pendingCount = allEntries.where((e) => e.isPending).length;

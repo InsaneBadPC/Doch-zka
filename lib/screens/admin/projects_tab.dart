@@ -83,11 +83,13 @@ class _ProjectsTabState extends State<ProjectsTab> {
   Widget build(BuildContext context) {
     return StreamBuilder<List<ProjectModel>>(
       stream: widget.firestoreService.streamProjects(),
+      initialData: widget.firestoreService.getProjectsSync(),
       builder: (context, projSnap) {
         final projects = projSnap.data ?? [];
 
         return StreamBuilder<List<TimeEntry>>(
           stream: widget.firestoreService.streamAllEntries(),
+          initialData: widget.firestoreService.getAllEntriesSync(),
           builder: (context, entriesSnap) {
             final allEntries = entriesSnap.data ?? [];
 

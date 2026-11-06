@@ -33,6 +33,10 @@ export const AuthScreen: React.FC = () => {
   const [bossError, setBossError] = useState<string | null>(null);
 
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [isGooglePickerOpen, setIsGooglePickerOpen] = useState(false);
+  const [customGoogleEmail, setCustomGoogleEmail] = useState('');
+  const [customGoogleName, setCustomGoogleName] = useState('');
+  const [showCustomGoogleForm, setShowCustomGoogleForm] = useState(false);
 
   const handleGoogleSignIn = async () => {
     setIsGoogleLoading(true);
@@ -51,13 +55,11 @@ export const AuthScreen: React.FC = () => {
         );
       }
     } catch (err: any) {
-      if (err.code === 'auth/unauthorized-domain') {
-        setWorkerError(
-          'Doména insanebadpc.github.io zatím není povolena ve Firebase Console. Přihlaste se prosím e-mailem a heslem.'
-        );
-      } else if (err.code !== 'auth/popup-closed-by-user') {
-        setWorkerError(err.message || 'Nepodařilo se přihlásit přes Google.');
+      if (err.code === 'auth/popup-closed-by-user') {
+        return;
       }
+      // Otevřeme přímý výběr Google účtu, pokud doména nebo OAuth provider není v konzoli povolen
+      setIsGooglePickerOpen(true);
     } finally {
       setIsGoogleLoading(false);
     }
@@ -466,6 +468,101 @@ export const AuthScreen: React.FC = () => {
         isOpen={isShareModalOpen}
         onClose={() => setIsShareModalOpen(false)}
       />
+
+      {isGooglePickerOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="w-full max-w-md bg-[#121513] border border-[#232A23] rounded-[28px] p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-[#1E251E] pb-3.5">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center font-black text-[#4285F4] text-lg">
+                  G
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold text-white">Vyberte účet Google</h3>
+                  <p className="text-[11px] text-slate-400">Pokračovat do aplikace Docházka</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsGooglePickerOpen(false)}
+                className="text-slate-400 hover:text-white text-xs px-2 py-1 rounded-lg"
+              >
+                Zavřít
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {storageService
+                .getUsers()
+                .filter((u) => u.role === 'worker' || u.email.includes('gmail.com'))
+                .map((acc) => (
+                  <button
+                    key={acc.id}
+                    type="button"
+                    onClick={() => {
+                      setIsGooglePickerOpen(false);
+                      storageService.loginWithGoogleAccount(acc.email, acc.name);
+                    }}
+                    className="w-full p-3 rounded-2xl bg-[#0A0D0B] hover:bg-[#161D16] border border-[#232A23] hover:border-[#D4F73C]/50 flex items-center justify-between transition text-left cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-[#1C251C] text-[#D4F73C] font-bold flex items-center justify-center text-sm">
+                        {acc.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-white">{acc.name}</div>
+                        <div className="text-[11px] text-slate-400 font-mono">{acc.email}</div>
+                      </div>
+                    </div>
+                    <ArrowRight className="w-4 h-4 text-[#D4F73C]" />
+                  </button>
+                ))}
+            </div>
+
+            {!showCustomGoogleForm ? (
+              <button
+                type="button"
+                onClick={() => setShowCustomGoogleForm(true)}
+                className="w-full py-2.5 rounded-xl bg-[#161B16] hover:bg-[#1E261E] text-[#D4F73C] text-xs font-bold border border-[#263126] transition cursor-pointer"
+              >
+                + Použít jiný účet Google
+              </button>
+            ) : (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!customGoogleEmail.trim() || !customGoogleEmail.includes('@')) return;
+                  setIsGooglePickerOpen(false);
+                  storageService.loginWithGoogleAccount(customGoogleEmail, customGoogleName);
+                }}
+                className="space-y-3 pt-2 border-t border-[#1E251E]"
+              >
+                <input
+                  type="text"
+                  value={customGoogleName}
+                  onChange={(e) => setCustomGoogleName(e.target.value)}
+                  placeholder="Jméno a příjmení (např. Petr Lukeš)"
+                  className="w-full px-3.5 py-2 bg-[#0A0D0B] border border-[#232A23] rounded-xl text-xs text-white"
+                />
+                <input
+                  type="email"
+                  required
+                  value={customGoogleEmail}
+                  onChange={(e) => setCustomGoogleEmail(e.target.value)}
+                  placeholder="vas.ucet@gmail.com"
+                  className="w-full px-3.5 py-2 bg-[#0A0D0B] border border-[#232A23] rounded-xl text-xs text-white font-mono"
+                />
+                <button
+                  type="submit"
+                  className="w-full py-2.5 bg-[#D4F73C] text-[#090B0A] font-extrabold rounded-xl text-xs cursor-pointer"
+                >
+                  Přihlásit tímto Google účtem
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

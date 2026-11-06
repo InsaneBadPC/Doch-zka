@@ -245,11 +245,13 @@ class _UsersTabState extends State<UsersTab> {
 
     return StreamBuilder<List<AppUser>>(
       stream: widget.firestoreService.streamAllUsers(),
+      initialData: widget.firestoreService.getUsersSync(),
       builder: (context, usersSnap) {
         final users = usersSnap.data ?? [];
 
         return StreamBuilder<List<TimeEntry>>(
           stream: widget.firestoreService.streamAllEntries(),
+          initialData: widget.firestoreService.getAllEntriesSync(),
           builder: (context, entriesSnap) {
             final allEntries = entriesSnap.data ?? [];
 

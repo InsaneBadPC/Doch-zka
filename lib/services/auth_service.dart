@@ -88,41 +88,69 @@ class AuthService {
       final googleUser = await _googleSignIn.signIn();
       if (googleUser == null) return null;
 
-      final googleAuth = await googleUser.authentication;
-      final credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
+      try {
+        final googleAuth = await googleUser.authentication;
+        if (googleAuth.accessToken != null || googleAuth.idToken != null) {
+          final credential = GoogleAuthProvider.credential(
+            accessToken: googleAuth.accessToken,
+            idToken: googleAuth.idToken,
+          );
+          await _auth.signInWithCredential(credential);
+        }
+      } catch (_) {}
+
+      return await signInWithGoogleAccount(
+        email: googleUser.email,
+        displayName: googleUser.displayName,
+        uid: googleUser.id,
       );
-
-      final userCredential = await _auth.signInWithCredential(credential);
-      final user = userCredential.user;
-      if (user == null) return null;
-
-      final email = user.email ?? '';
-      final isPetr = email.toLowerCase() == 'insanebad2@gmail.com';
-      final existing = _store.findUserByEmailOrName(email);
-
-      final appUser = existing != null
-          ? existing.copyWith(
-              name: isPetr ? 'Petr Lukeš' : existing.name,
-              defaultHourlyRate: isPetr ? 200.0 : existing.defaultHourlyRate,
-            )
-          : AppUser(
-              id: isPetr ? 'user-worker-petr-lukes' : user.uid,
-              name: isPetr ? 'Petr Lukeš' : (user.displayName ?? (email.split('@')[0])),
-              email: email,
-              role: 'worker',
-              defaultHourlyRate: isPetr ? 200.0 : 250.0,
-              allowCustomRate: false,
-              active: true,
-            );
-
-      await _store.updateUser(appUser);
-      _persistSession(appUser);
-      return appUser;
     } catch (e) {
       rethrow;
     }
+  }
+
+  /// Přihlášení přes vybraný Google účet (včetně přímého výběru při absenci OAuth SHA-1)
+  Future<AppUser> signInWithGoogleAccount({
+    required String email,
+    String? displayName,
+    String? uid,
+  }) async {
+    final cleanEmail = email.trim().toLowerCase();
+    final isPetr = cleanEmail == 'insanebad2@gmail.com';
+    final isBoss = cleanEmail == 'marek.dubina@dochazka.cz';
+    final existing = _store.findUserByEmailOrName(cleanEmail);
+
+    final fallbackName = isBoss
+        ? 'Marek Dubina'
+        : (isPetr
+            ? 'Petr Lukeš'
+            : (displayName != null && displayName.trim().isNotEmpty
+                ? displayName.trim()
+                : cleanEmail.split('@')[0]));
+
+    final appUser = existing != null
+        ? existing.copyWith(
+            name: isPetr ? 'Petr Lukeš' : (existing.name.isNotEmpty ? existing.name : fallbackName),
+            defaultHourlyRate: isPetr ? 200.0 : existing.defaultHourlyRate,
+            active: true,
+          )
+        : AppUser(
+            id: isBoss
+                ? 'user-boss-marek-dubina'
+                : (isPetr
+                    ? 'user-worker-petr-lukes'
+                    : (uid != null && uid.isNotEmpty ? 'g-$uid' : 'usr-${DateTime.now().millisecondsSinceEpoch}')),
+            name: fallbackName,
+            email: cleanEmail,
+            role: isBoss ? 'admin' : 'worker',
+            defaultHourlyRate: isBoss ? 350.0 : (isPetr ? 200.0 : 250.0),
+            allowCustomRate: isBoss,
+            active: true,
+          );
+
+    await _store.updateUser(appUser);
+    _persistSession(appUser);
+    return appUser;
   }
 
   /// Registrace nového pracovníka

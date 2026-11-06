@@ -388,12 +388,14 @@ class FirestoreService {
 
   // ================= PROJECTS =================
 
+  List<ProjectModel> getProjectsSync() {
+    final copy = List<ProjectModel>.from(_projects);
+    copy.sort((a, b) => a.name.compareTo(b.name));
+    return copy;
+  }
+
   Stream<List<ProjectModel>> streamProjects() {
-    return _createReactiveStream<List<ProjectModel>>(() {
-      final copy = List<ProjectModel>.from(_projects);
-      copy.sort((a, b) => a.name.compareTo(b.name));
-      return copy;
-    });
+    return _createReactiveStream<List<ProjectModel>>(() => getProjectsSync());
   }
 
   Future<void> createProject({
@@ -450,20 +452,24 @@ class FirestoreService {
 
   // ================= TIME ENTRIES =================
 
+  List<TimeEntry> getWorkerEntriesSync(String uid) {
+    final list = _entries.where((e) => e.userId == uid).toList();
+    list.sort((a, b) => b.startTime.compareTo(a.startTime));
+    return list;
+  }
+
+  List<TimeEntry> getAllEntriesSync() {
+    final list = List<TimeEntry>.from(_entries);
+    list.sort((a, b) => b.startTime.compareTo(a.startTime));
+    return list;
+  }
+
   Stream<List<TimeEntry>> streamWorkerEntries(String uid) {
-    return _createReactiveStream<List<TimeEntry>>(() {
-      final list = _entries.where((e) => e.userId == uid).toList();
-      list.sort((a, b) => b.startTime.compareTo(a.startTime));
-      return list;
-    });
+    return _createReactiveStream<List<TimeEntry>>(() => getWorkerEntriesSync(uid));
   }
 
   Stream<List<TimeEntry>> streamAllEntries() {
-    return _createReactiveStream<List<TimeEntry>>(() {
-      final list = List<TimeEntry>.from(_entries);
-      list.sort((a, b) => b.startTime.compareTo(a.startTime));
-      return list;
-    });
+    return _createReactiveStream<List<TimeEntry>>(() => getAllEntriesSync());
   }
 
   Future<bool> hasCollision({

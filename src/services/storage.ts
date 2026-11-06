@@ -271,6 +271,51 @@ class StorageService {
     return found;
   }
 
+  loginWithGoogleAccount(email: string, displayName?: string): AppUser {
+    const cleanEmail = email.trim().toLowerCase();
+    const users = this.getUsers();
+    const isPetr = cleanEmail === 'insanebad2@gmail.com';
+    const isBoss = cleanEmail === BOSS_EMAIL.toLowerCase();
+
+    let found = users.find((u) => u.email.toLowerCase() === cleanEmail);
+    if (!found) {
+      const fallbackName = isBoss
+        ? BOSS_NAME
+        : isPetr
+          ? 'Petr Lukeš'
+          : displayName && displayName.trim().length > 0
+            ? displayName.trim()
+            : cleanEmail.split('@')[0];
+
+      found = {
+        id: isBoss
+          ? 'user-boss-marek-dubina'
+          : isPetr
+            ? 'user-worker-petr-lukes'
+            : 'usr-' + Date.now(),
+        name: fallbackName,
+        email: cleanEmail,
+        role: isBoss ? 'admin' : 'worker',
+        defaultHourlyRate: isBoss ? 350 : isPetr ? 200 : 250,
+        allowCustomRate: isBoss,
+        active: true,
+      };
+      users.push(found);
+      localStorage.setItem(STORAGE_KEY_USERS, JSON.stringify(users));
+    } else if (isPetr) {
+      found.name = 'Petr Lukeš';
+      found.defaultHourlyRate = 200;
+      this.updateUser(found);
+    }
+
+    try {
+      firestoreSyncService.saveUserToFirestore(found);
+    } catch {}
+
+    this.setCurrentUser(found);
+    return found;
+  }
+
   register(
     name: string,
     email: string,

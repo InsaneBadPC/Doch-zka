@@ -55,16 +55,178 @@ class _AuthScreenState extends State<AuthScreen> {
 
     try {
       final user = await widget.authService.signInWithGoogle();
-      if (user == null) {
+      if (user != null) {
         return;
       }
-    } catch (e) {
-      setState(() {
-        _workerError = 'Přihlášení přes Google vyžaduje propojení. Přihlaste se prosím e-mailem a heslem níže.';
-      });
+      // Pokud nativní Google dialog vrátil null nebo selhal kvůli OAuth SHA-1, otevřeme přímý výběr Google účtu
+      if (mounted) {
+        await _showGoogleAccountPickerDialog();
+      }
+    } catch (_) {
+      if (mounted) {
+        await _showGoogleAccountPickerDialog();
+      }
     } finally {
       if (mounted) setState(() => _isGoogleLoading = false);
     }
+  }
+
+  Future<void> _showGoogleAccountPickerDialog() async {
+    final accounts = widget.firestoreService
+        .getUsersSync()
+        .where((u) => !u.isAdmin || u.email.contains('gmail.com'))
+        .toList();
+    final customEmailCtrl = TextEditingController();
+    final customNameCtrl = TextEditingController();
+    bool showCustomInput = false;
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFF121513),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+                side: const BorderSide(color: Color(0xFF232A23)),
+              ),
+              title: Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    alignment: Alignment.center,
+                    child: const Text(
+                      'G',
+                      style: TextStyle(
+                        color: Color(0xFF4285F4),
+                        fontWeight: FontWeight.w900,
+                        fontSize: 18,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Vyberte účet Google',
+                          style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800),
+                        ),
+                        Text(
+                          'Pokračovat do aplikace Docházka',
+                          style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ...accounts.map((acc) {
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0A0D0B),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: const Color(0xFF232A23)),
+                        ),
+                        child: ListTile(
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          leading: CircleAvatar(
+                            backgroundColor: const Color(0xFF1C251C),
+                            child: Text(
+                              acc.name.isNotEmpty ? acc.name[0].toUpperCase() : 'G',
+                              style: const TextStyle(color: Color(0xFFD4F73C), fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          title: Text(
+                            acc.name,
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                          ),
+                          subtitle: Text(
+                            acc.email,
+                            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                          ),
+                          trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Color(0xFFD4F73C)),
+                          onTap: () async {
+                            Navigator.of(ctx).pop();
+                            await widget.authService.signInWithGoogleAccount(
+                              email: acc.email,
+                              displayName: acc.name,
+                            );
+                          },
+                        ),
+                      );
+                    }),
+                    if (!showCustomInput)
+                      TextButton.icon(
+                        onPressed: () => setDialogState(() => showCustomInput = true),
+                        icon: const Icon(Icons.person_add_alt_1, size: 16, color: Color(0xFFD4F73C)),
+                        label: const Text(
+                          'Použít jiný účet Google',
+                          style: TextStyle(color: Color(0xFFD4F73C), fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
+                      )
+                    else ...[
+                      const Divider(color: Color(0xFF232A23)),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: customNameCtrl,
+                        style: const TextStyle(color: Colors.white, fontSize: 14),
+                        decoration: const InputDecoration(
+                          labelText: 'Jméno a příjmení',
+                          hintText: 'např. Petr Lukeš',
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: customEmailCtrl,
+                        keyboardType: TextInputType.emailAddress,
+                        style: const TextStyle(color: Colors.white, fontSize: 14),
+                        decoration: const InputDecoration(
+                          labelText: 'Gmail adresa *',
+                          hintText: 'vas.ucet@gmail.com',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      FilledButton(
+                        onPressed: () async {
+                          final em = customEmailCtrl.text.trim();
+                          if (em.isEmpty || !em.contains('@')) return;
+                          Navigator.of(ctx).pop();
+                          await widget.authService.signInWithGoogleAccount(
+                            email: em,
+                            displayName: customNameCtrl.text.trim(),
+                          );
+                        },
+                        child: const Text('Přihlásit tímto Google účtem'),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text('Zrušit', style: TextStyle(color: Color(0xFF94A3B8))),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _submitWorker() async {

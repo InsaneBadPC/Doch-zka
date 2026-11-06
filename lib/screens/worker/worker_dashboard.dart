@@ -304,6 +304,7 @@ class _WorkerDashboardState extends State<WorkerDashboard> {
       ),
       body: StreamBuilder<List<ProjectModel>>(
         stream: widget.firestoreService.streamProjects(),
+        initialData: widget.firestoreService.getProjectsSync(),
         builder: (context, projectsSnap) {
           final projects = projectsSnap.data ?? [];
           final openProjects = projects.where((p) => p.isOpen).toList();
@@ -314,6 +315,7 @@ class _WorkerDashboardState extends State<WorkerDashboard> {
 
           return StreamBuilder<List<TimeEntry>>(
             stream: widget.firestoreService.streamWorkerEntries(widget.currentUser.id),
+            initialData: widget.firestoreService.getWorkerEntriesSync(widget.currentUser.id),
             builder: (context, entriesSnap) {
               final allEntries = entriesSnap.data ?? [];
               final runningEntry = allEntries.where((e) => e.isRunning).firstOrNull;
@@ -480,7 +482,10 @@ class _WorkerDashboardState extends State<WorkerDashboard> {
             const SizedBox(height: 14),
             if (openProjects.isNotEmpty)
               DropdownButtonFormField<String>(
-                value: _selectedProjectId,
+                value: openProjects.any((p) => p.id == _selectedProjectId)
+                    ? _selectedProjectId
+                    : openProjects.first.id,
+                dropdownColor: const Color(0xFF121513),
                 decoration: const InputDecoration(
                   labelText: 'Vyberte otevřenou zakázku',
                   prefixIcon: Icon(Icons.business_center_outlined, color: Color(0xFFD4F73C), size: 18),

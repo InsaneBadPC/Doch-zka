@@ -123,6 +123,7 @@ class _ApprovalTabState extends State<ApprovalTab> {
 
     return StreamBuilder<List<TimeEntry>>(
       stream: widget.firestoreService.streamAllEntries(),
+      initialData: widget.firestoreService.getAllEntriesSync(),
       builder: (context, snapshot) {
         final allEntries = snapshot.data ?? [];
         final pendingEntries = allEntries.where((e) => e.isPending).toList();

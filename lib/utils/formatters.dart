@@ -1,30 +1,58 @@
-import 'package:intl/intl.dart';
-
 class Formatters {
-  static final NumberFormat _currencyFormat = NumberFormat('#,##0.00', 'cs_CZ');
-  static final NumberFormat _integerCurrencyFormat = NumberFormat('#,##0', 'cs_CZ');
-  static final DateFormat _dateFormat = DateFormat('dd.MM.yyyy', 'cs_CZ');
-  static final DateFormat _monthYearFormat = DateFormat('MM/yyyy', 'cs_CZ');
-  static final DateFormat _timeFormat = DateFormat('HH:mm', 'cs_CZ');
+  static const List<String> _czechMonths = [
+    'Leden',
+    'Únor',
+    'Březen',
+    'Duben',
+    'Květen',
+    'Červen',
+    'Červenec',
+    'Srpen',
+    'Září',
+    'Říjen',
+    'Listopad',
+    'Prosinec',
+  ];
 
-  /// Formátování měny v Kč
+  /// Formátování měny v Kč bez závislosti na intl locale
   static String formatKcz(double amount, {bool showDecimals = true}) {
-    if (showDecimals && amount % 1 != 0) {
-      return '${_currencyFormat.format(amount)} Kč';
+    if (amount.isNaN || amount.isInfinite) return '0 Kč';
+    final isNegative = amount < 0;
+    final absVal = amount.abs();
+    final hasFraction = showDecimals && (absVal - absVal.truncateToDouble()).abs() > 0.001;
+    final fixed = hasFraction ? absVal.toStringAsFixed(2) : absVal.round().toString();
+    final parts = fixed.split('.');
+    final intPart = parts[0];
+
+    final buffer = StringBuffer();
+    for (int i = 0; i < intPart.length; i++) {
+      if (i > 0 && (intPart.length - i) % 3 == 0) {
+        buffer.write(' ');
+      }
+      buffer.write(intPart[i]);
     }
-    return '${_integerCurrencyFormat.format(amount)} Kč';
+
+    final sign = isNegative ? '-' : '';
+    if (hasFraction && parts.length > 1) {
+      return '$sign${buffer.toString()},${parts[1]} Kč';
+    }
+    return '$sign${buffer.toString()} Kč';
   }
 
   /// Formátování hodin
   static String formatHours(double hours) {
+    if (hours.isNaN || hours.isInfinite) return '0.00 h';
     return '${hours.toStringAsFixed(2)} h';
   }
 
   /// Formátování data YYYY-MM-DD do českého dd.MM.yyyy
   static String formatDateCz(String isoDate) {
+    if (isoDate.isEmpty) return '';
     try {
       final dt = DateTime.parse(isoDate);
-      return _dateFormat.format(dt);
+      final d = dt.day.toString().padLeft(2, '0');
+      final m = dt.month.toString().padLeft(2, '0');
+      return '$d.$m.${dt.year}';
     } catch (_) {
       return isoDate;
     }
@@ -35,7 +63,9 @@ class Formatters {
     if (isoString == null || isoString.isEmpty) return '';
     try {
       final dt = DateTime.parse(isoString);
-      return _timeFormat.format(dt);
+      final h = dt.hour.toString().padLeft(2, '0');
+      final m = dt.minute.toString().padLeft(2, '0');
+      return '$h:$m';
     } catch (_) {
       return '';
     }
@@ -43,19 +73,21 @@ class Formatters {
 
   /// Formátování stopek HH:mm:ss ze sekund
   static String formatDuration(int totalSeconds) {
-    final hours = totalSeconds ~/ 3600;
-    final minutes = (totalSeconds % 3600) ~/ 60;
-    final seconds = totalSeconds % 60;
+    final safe = totalSeconds < 0 ? 0 : totalSeconds;
+    final hours = safe ~/ 3600;
+    final minutes = (safe % 3600) ~/ 60;
+    final seconds = safe % 60;
     return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
 
   /// Získání klíče měsíce YYYY-MM
   static String toMonthKey(DateTime date) {
-    return DateFormat('yyyy-MM').format(date);
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}';
   }
 
-  /// Zobrazení měsíce v záhlaví (např. Březen 2026 nebo 03/2026)
+  /// Zobrazení měsíce v záhlaví (např. Listopad 2026)
   static String formatMonthDisplay(DateTime date) {
-    return _monthYearFormat.format(date);
+    final idx = (date.month - 1).clamp(0, 11);
+    return '${_czechMonths[idx]} ${date.year}';
   }
 }
