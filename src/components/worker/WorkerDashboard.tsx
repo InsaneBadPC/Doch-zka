@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AppUser, Project, TimeEntry } from '../../types';
+import { AppUser, Project, SalaryAdvance, TimeEntry } from '../../types';
 import { storageService } from '../../services/storage';
 import {
   formatDateCz,
@@ -51,6 +51,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ currentUser })
   const [activeTab, setActiveTab] = useState<'shifts' | 'calendar' | 'projects'>('shifts');
   const [projects, setProjects] = useState<Project[]>([]);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
+  const [advances, setAdvances] = useState<SalaryAdvance[]>([]);
   const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -76,11 +77,12 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ currentUser })
     const loadData = () => {
       setProjects(storageService.getProjects());
       setEntries(storageService.getTimeEntries());
+      setAdvances(storageService.getAdvances(currentUser.id));
     };
     loadData();
     const unsubscribe = storageService.subscribe(loadData);
     return () => unsubscribe();
-  }, []);
+  }, [currentUser.id]);
 
   // Ticker pro stopky
   useEffect(() => {
@@ -191,6 +193,10 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ currentUser })
       pendingHours += e.hoursWorked;
     }
   });
+
+  const userMonthAdvances = advances.filter((a) => a.monthKey === monthKey);
+  const advancesTotal = userMonthAdvances.reduce((s, a) => s + a.amount, 0);
+  const netPayable = approvedAmount - advancesTotal;
 
   const changeMonth = (delta: number) => {
     setSelectedMonth(new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() + delta, 1));
@@ -337,6 +343,17 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ currentUser })
                 <span className="text-xs font-normal text-slate-400 ml-1.5 font-sans">
                   ({formatHours(pendingHours)})
                 </span>
+              </div>
+            </div>
+
+            <div className="h-8 border-r border-[#232A23] hidden sm:block"></div>
+
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono">
+                Čistý doplatek (po zálohách -{formatKcz(advancesTotal)})
+              </div>
+              <div className="font-mono tabular-nums text-xl sm:text-2xl font-black text-emerald-400">
+                {formatKcz(netPayable)}
               </div>
             </div>
           </div>

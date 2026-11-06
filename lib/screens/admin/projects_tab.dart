@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
+import '../../models/app_user.dart';
 import '../../models/project_model.dart';
 import '../../models/time_entry.dart';
 import '../../services/firestore_service.dart';
 import '../../utils/formatters.dart';
+import '../common/project_photos_dialog.dart';
 
 class ProjectsTab extends StatefulWidget {
+  final AppUser currentUser;
   final FirestoreService firestoreService;
 
   const ProjectsTab({
     super.key,
+    required this.currentUser,
     required this.firestoreService,
   });
 
@@ -74,6 +78,70 @@ class _ProjectsTabState extends State<ProjectsTab> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Zakázka byla úspěšně založena.')),
+        );
+      }
+    }
+  }
+
+  Future<void> _editProjectDialog(ProjectModel project) async {
+    final nameCtrl = TextEditingController(text: project.name);
+    final clientCtrl = TextEditingController(text: project.client);
+    final budgetCtrl = TextEditingController(text: project.budgetLimitKcz.toStringAsFixed(0));
+    final formKey = GlobalKey<FormState>();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Upravit zakázku', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(labelText: 'Název zakázky *'),
+                validator: (val) => val == null || val.trim().isEmpty ? 'Zadejte název' : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: clientCtrl,
+                decoration: const InputDecoration(labelText: 'Zákazník / Firma *'),
+                validator: (val) => val == null || val.trim().isEmpty ? 'Zadejte zákazníka' : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: budgetCtrl,
+                decoration: const InputDecoration(labelText: 'Mzdový rozpočet (Kč) *'),
+                keyboardType: TextInputType.number,
+                validator: (val) => (val == null || double.tryParse(val) == null) ? 'Zadejte platnou částku' : null,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Zrušit')),
+          FilledButton(
+            onPressed: () {
+              if (formKey.currentState!.validate()) Navigator.of(ctx).pop(true);
+            },
+            child: const Text('Uložit změny'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await widget.firestoreService.updateProject(
+        project.copyWith(
+          name: nameCtrl.text.trim(),
+          client: clientCtrl.text.trim(),
+          budgetLimitKcz: double.parse(budgetCtrl.text),
+        ),
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Zakázka byla upravena.')),
         );
       }
     }
@@ -252,19 +320,79 @@ class _ProjectsTabState extends State<ProjectsTab> {
                     'Čeká na schválení: ${Formatters.formatKcz(pendingCost)} (${Formatters.formatHours(pendingHours)})',
                     style: const TextStyle(fontSize: 12, color: Color(0xFFF59E0B)),
                   ),
-                  const SizedBox(height: 10),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
+                  if (workerStats.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    const Text(
+                      'Rozpad po pracovnících (schváleno):',
+                      style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 4),
+                    ...workerStats.values.map(
+                      (ws) => Padding(
+                        padding: const EdgeInsets.only(bottom: 3),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(ws.name, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                            Text(
+                              '${Formatters.formatHours(ws.approvedHours)} · ${Formatters.formatKcz(ws.approvedCost)}',
+                              style: const TextStyle(color: Color(0xFFD4F73C), fontSize: 12, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.end,
                     children: [
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFFD4F73C),
+                          side: const BorderSide(color: Color(0xFF2B392B)),
+                        ),
+                        onPressed: () {
+                          showDialog(
+                            context: context,
+                            builder: (_) => ProjectPhotosDialog(
+                              project: project,
+                              currentUser: widget.currentUser,
+                              firestoreService: widget.firestoreService,
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.photo_camera_outlined, size: 15),
+                        label: const Text('Fotky'),
+                      ),
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          side: const BorderSide(color: Color(0xFF232A23)),
+                        ),
+                        onPressed: () => _editProjectDialog(project),
+                        icon: const Icon(Icons.edit_outlined, size: 15),
+                        label: const Text('Upravit'),
+                      ),
                       OutlinedButton.icon(
                         style: OutlinedButton.styleFrom(
                           foregroundColor: Colors.white,
                           side: const BorderSide(color: Color(0xFF232A23)),
                         ),
                         onPressed: () => widget.firestoreService.toggleProjectStatus(project.id, project.status),
-                        icon: Icon(project.isOpen ? Icons.lock_outline : Icons.lock_open, size: 16),
-                        label: Text(project.isOpen ? 'Uzavřít zakázku' : 'Znovu otevřít'),
+                        icon: Icon(project.isOpen ? Icons.lock_outline : Icons.lock_open, size: 15),
+                        label: Text(project.isOpen ? 'Uzavřít' : 'Otevřít'),
                       ),
+                      if (project.id != 'proj-default-main')
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline, color: Color(0xFFFF5B65), size: 20),
+                          tooltip: 'Smazat zakázku',
+                          onPressed: () async {
+                            await widget.firestoreService.deleteProject(project.id);
+                          },
+                        ),
                     ],
                   ),
                 ],

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Absence, AppUser, Project, TimeEntry } from '../../types';
+import { Absence, AppUser, Project, SalaryAdvance, TimeEntry } from '../../types';
 import { storageService } from '../../services/storage';
 import {
   formatDateCz,
@@ -61,7 +61,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
   const [projects, setProjects] = useState<Project[]>([]);
   const [users, setUsers] = useState<AppUser[]>([]);
   const [absences, setAbsences] = useState<Absence[]>([]);
+  const [advances, setAdvances] = useState<SalaryAdvance[]>([]);
   const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
+  const [nowTick, setNowTick] = useState<number>(Date.now());
 
   // Modaly
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
@@ -86,12 +88,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
       setProjects(storageService.getProjects());
       setUsers(storageService.getUsers());
       setAbsences(storageService.getAbsences());
+      setAdvances(storageService.getAdvances());
     };
     loadData();
     const unsubscribe = storageService.subscribe(loadData);
-    return () => unsubscribe();
+    const timer = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => {
+      unsubscribe();
+      clearInterval(timer);
+    };
   }, []);
 
+  const runningEntries = entries.filter((e) => e.isRunning);
   const pendingEntries = entries.filter((e) => e.status === 'pending');
 
   const changeMonth = (delta: number) => {
@@ -158,13 +166,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
 
   // --- UZÁVĚRKA ---
   const approvedMonthEntries = entries.filter((e) => e.date.startsWith(monthKey) && e.status === 'approved');
+  const monthAdvances = advances.filter((a) => a.monthKey === monthKey);
 
   let totalCompanyPayroll = 0;
   let totalCompanyHours = 0;
+  let totalCompanyAdvances = 0;
 
-  const workerSummaryMap: Record<string, { user: AppUser; hours: number; cost: number; count: number }> = {};
+  const workerSummaryMap: Record<string, { user: AppUser; hours: number; cost: number; advances: number; count: number }> = {};
   users.forEach((u) => {
-    workerSummaryMap[u.id] = { user: u, hours: 0, cost: 0, count: 0 };
+    workerSummaryMap[u.id] = { user: u, hours: 0, cost: 0, advances: 0, count: 0 };
   });
 
   approvedMonthEntries.forEach((e) => {
@@ -176,6 +186,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
       workerSummaryMap[e.userId].count += 1;
     }
   });
+
+  monthAdvances.forEach((adv) => {
+    totalCompanyAdvances += adv.amount;
+    if (workerSummaryMap[adv.userId]) {
+      workerSummaryMap[adv.userId].advances += adv.amount;
+    }
+  });
+
+  const totalCompanyNetPayable = totalCompanyPayroll - totalCompanyAdvances;
 
   const handleCopyCsv = async () => {
     if (approvedMonthEntries.length === 0) {
@@ -437,6 +456,55 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
       {/* ================= TAB 1: GRAFY & ANALYTIKA ================= */}
       {activeTab === 'analytics' && (
         <div className="space-y-6">
+          {/* Živý přehled přítomnosti: Právě na směně */}
+          <div className="bg-[#121513] border border-[#232A23] rounded-[28px] p-5 shadow-xl space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className={`w-2.5 h-2.5 rounded-full ${runningEntries.length > 0 ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
+                <h3 className="text-xs font-black uppercase tracking-wider text-white font-mono">
+                  Právě na směně — ŽIVĚ ({runningEntries.length})
+                </h3>
+              </div>
+              <span className="text-[11px] font-mono text-slate-400">
+                Real-time monitoring stopek
+              </span>
+            </div>
+
+            {runningEntries.length === 0 ? (
+              <div className="text-xs text-slate-500">
+                Momentálně žádný pracovník nemá spuštěné stopky směny.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {runningEntries.map((re) => {
+                  const elapsedSec = Math.max(0, Math.floor((nowTick - new Date(re.startTime).getTime()) / 1000));
+                  const hrs = Math.floor(elapsedSec / 3600);
+                  const mins = Math.floor((elapsedSec % 3600) / 60);
+                  const secs = elapsedSec % 60;
+                  const liveEarned = (elapsedSec / 3600) * re.hourlyRate;
+                  return (
+                    <div key={re.id} className="p-3.5 rounded-2xl bg-[#0A0D0B] border border-emerald-500/30 flex items-center justify-between">
+                      <div>
+                        <div className="font-bold text-white text-sm">{re.userName}</div>
+                        <div className="text-xs text-slate-400">
+                          {re.projectName} · od {formatTimeFromIso(re.startTime)}
+                        </div>
+                      </div>
+                      <div className="text-right font-mono">
+                        <div className="text-sm font-black text-emerald-400">
+                          {String(hrs).padStart(2, '0')}:{String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}
+                        </div>
+                        <div className="text-xs font-bold text-[#D4F73C]">
+                          {formatKcz(liveEarned)}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           {/* Propracovaný burzovní / svíčkový graf (Weekly Trend) */}
           <WeeklyTrendChart entries={entries} />
 
@@ -888,7 +956,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
                       </div>
                     )}
 
-                    <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-[#1E251E]">
+                    <div className="flex flex-wrap items-center justify-end gap-2.5 pt-2 border-t border-[#1E251E]">
                       <button
                         type="button"
                         onClick={() => {
@@ -898,6 +966,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
                         className="px-3.5 py-2 text-xs font-semibold text-[#FF5B65] hover:bg-[#2A1516] rounded-xl transition border border-[#3A1E20] flex items-center gap-1"
                       >
                         <X className="w-3.5 h-3.5" /> Vrátit k opravě
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newHoursStr = prompt('Upravit počet čistých odpracovaných hodin:', String(entry.hoursWorked));
+                          if (newHoursStr === null) return;
+                          const parsedHours = parseFloat(newHoursStr.replace(',', '.'));
+                          if (isNaN(parsedHours) || parsedHours <= 0) return;
+                          const newRateStr = prompt('Upravit hodinovou sazbu (Kč/h):', String(entry.hourlyRate));
+                          const parsedRate = newRateStr ? parseFloat(newRateStr) || entry.hourlyRate : entry.hourlyRate;
+                          const updated: TimeEntry = {
+                            ...entry,
+                            hoursWorked: Math.round(parsedHours * 100) / 100,
+                            hourlyRate: parsedRate,
+                            totalAmount: Math.round(parsedHours * parsedRate * 100) / 100,
+                            status: 'approved',
+                            approvedBy: currentUser.id,
+                            approvedAt: new Date().toISOString(),
+                          };
+                          storageService.updateShift(updated);
+                          showToast(`Směna pracovníka ${entry.userName} byla upravena a schválena.`);
+                        }}
+                        className="px-3.5 py-2 text-xs font-semibold text-slate-200 hover:text-white bg-[#1A221A] hover:bg-[#253225] rounded-xl transition border border-[#2A372A] flex items-center gap-1"
+                      >
+                        <Edit2 className="w-3.5 h-3.5 text-[#D4F73C]" /> Upravit a schválit
                       </button>
 
                       <button
@@ -958,12 +1052,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
             </div>
           </div>
 
-          <div className="bg-[#121513] border border-[#232A23] rounded-[30px] p-6 sm:p-8 shadow-xl space-y-3">
-            <div className="text-xs font-bold uppercase tracking-wider text-slate-400 font-mono">
-              Celková schválená suma k vyplacení
-            </div>
-            <div className="text-3xl sm:text-5xl font-black text-white font-mono tabular-nums">
-              {formatKcz(totalCompanyPayroll)}
+          <div className="bg-[#121513] border border-[#232A23] rounded-[30px] p-6 sm:p-8 shadow-xl space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <div className="text-xs font-bold uppercase tracking-wider text-slate-400 font-mono">
+                  Hrubé schválené mzdy
+                </div>
+                <div className="text-2xl sm:text-4xl font-black text-white font-mono tabular-nums mt-1">
+                  {formatKcz(totalCompanyPayroll)}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs font-bold uppercase tracking-wider text-slate-400 font-mono">
+                  Vyplacené zálohy
+                </div>
+                <div className="text-2xl sm:text-4xl font-black text-[#FF5B65] font-mono tabular-nums mt-1">
+                  -{formatKcz(totalCompanyAdvances)}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs font-bold uppercase tracking-wider text-slate-400 font-mono">
+                  Čistý doplatek k výplatě
+                </div>
+                <div className="text-2xl sm:text-4xl font-black text-emerald-400 font-mono tabular-nums mt-1">
+                  {formatKcz(totalCompanyNetPayable)}
+                </div>
+              </div>
             </div>
             <div className="text-xs text-slate-400 font-mono">
               Odpracováno {formatHours(totalCompanyHours)} v celkem {approvedMonthEntries.length} schválených směnách.
@@ -972,23 +1086,47 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
 
           {/* Rozpis po pracovnících */}
           <div className="bg-[#121513] border border-[#232A23] rounded-[30px] overflow-hidden shadow-xl divide-y divide-[#1C231C]">
-            {Object.values(workerSummaryMap).map(({ user, hours, cost, count }) => (
-              <div
-                key={user.id}
-                className="p-4 flex items-center justify-between hover:bg-[#161D16] transition"
-              >
-                <div>
-                  <div className="font-extrabold text-white text-sm">{user.name}</div>
-                  <div className="text-xs text-slate-400 font-mono mt-0.5">
-                    {count} schválených směn · {formatHours(hours)}
+            {Object.values(workerSummaryMap).map(({ user, hours, cost, advances: uAdv, count }) => {
+              const net = cost - uAdv;
+              return (
+                <div
+                  key={user.id}
+                  className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-[#161D16] transition"
+                >
+                  <div>
+                    <div className="font-extrabold text-white text-sm">{user.name}</div>
+                    <div className="text-xs text-slate-400 font-mono mt-0.5">
+                      {count} schválených směn · {formatHours(hours)} · Sazba {formatKcz(user.defaultHourlyRate)}/h
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4 font-mono">
+                    <div className="text-right">
+                      <div className="text-xs text-slate-400">
+                        Schváleno: <strong className="text-[#D4F73C]">{formatKcz(cost)}</strong> · Zálohy: <strong className="text-[#FF5B65]">-{formatKcz(uAdv)}</strong>
+                      </div>
+                      <div className="font-black text-sm text-emerald-400">
+                        Doplatek: {formatKcz(net)}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const amtStr = prompt(`Zapsat zálohu pro ${user.name} (${monthKey}) v Kč:`, '2000');
+                        if (!amtStr) return;
+                        const amt = parseFloat(amtStr);
+                        if (isNaN(amt) || amt <= 0) return;
+                        const note = prompt('Poznámka k záloze:', 'Záloha na mzdu') || 'Záloha';
+                        storageService.addAdvance(user.id, user.name, monthKey, amt, note);
+                        showToast(`Zapsána záloha ${formatKcz(amt)} pro ${user.name}.`);
+                      }}
+                      className="px-3 py-1.5 bg-[#1A221A] hover:bg-[#D4F73C] text-[#D4F73C] hover:text-black font-bold text-xs rounded-xl border border-[#2A372A] transition"
+                    >
+                      + Záloha
+                    </button>
                   </div>
                 </div>
-                <div className="text-right font-mono">
-                  <div className="font-bold text-base text-[#D4F73C]">{formatKcz(cost)}</div>
-                  <div className="text-[11px] text-slate-500">{formatKcz(user.defaultHourlyRate)}/h základ</div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

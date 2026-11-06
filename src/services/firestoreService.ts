@@ -7,7 +7,7 @@ import {
   deleteDoc,
 } from 'firebase/firestore';
 import { auth, db } from './firebase';
-import { Absence, AppUser, Project, ProjectPhoto, TimeEntry } from '../types';
+import { Absence, AppUser, Project, ProjectPhoto, SalaryAdvance, TimeEntry } from '../types';
 import { storageService } from './storage';
 
 export enum OperationType {
@@ -233,6 +233,33 @@ class FirestoreSyncService {
     } catch (e) {
       console.warn('Could not attach time_entries listener:', e);
     }
+
+    // 5. Synchronizace Záloh (Advances)
+    try {
+      const advancesUnsub = onSnapshot(
+        collection(db, 'advances'),
+        (snapshot) => {
+          const remoteAdv: SalaryAdvance[] = [];
+          snapshot.forEach((d) => {
+            remoteAdv.push({ id: d.id, ...d.data() } as SalaryAdvance);
+          });
+          if (remoteAdv.length > 0) {
+            const local = storageService.getAdvances();
+            const localMap = new Map(local.map((a) => [a.id, a]));
+            remoteAdv.forEach((r) => localMap.set(r.id, r));
+            const merged = Array.from(localMap.values());
+            localStorage.setItem('dochazka_advances_v3', JSON.stringify(merged));
+            storageService.notify();
+          }
+        },
+        (error) => {
+          console.warn('Realtime sync advances note:', error.message);
+        }
+      );
+      this.unsubscribeFns.push(advancesUnsub);
+    } catch (e) {
+      console.warn('Could not attach advances listener:', e);
+    }
   }
 
   // --- Users Firestore Mutations ---
@@ -317,6 +344,23 @@ class FirestoreSyncService {
       await deleteDoc(doc(db, 'time_entries', entryId));
     } catch (error) {
       console.warn('Could not delete time entry from Firestore:', error);
+    }
+  }
+
+  // --- Salary Advances Firestore Mutations ---
+  async saveAdvanceToFirestore(advance: SalaryAdvance): Promise<void> {
+    try {
+      await setDoc(doc(db, 'advances', advance.id), advance, { merge: true });
+    } catch (error) {
+      console.warn('Could not save advance to Firestore:', error);
+    }
+  }
+
+  async deleteAdvanceFromFirestore(advanceId: string): Promise<void> {
+    try {
+      await deleteDoc(doc(db, 'advances', advanceId));
+    } catch (error) {
+      console.warn('Could not delete advance from Firestore:', error);
     }
   }
 

@@ -1,4 +1,4 @@
-import { Absence, AbsenceStatus, AppUser, GpsLocation, Project, ProjectPhoto, ProjectStatus, TimeEntry } from '../types';
+import { Absence, AbsenceStatus, AppUser, GpsLocation, Project, ProjectPhoto, ProjectStatus, SalaryAdvance, TimeEntry } from '../types';
 import { firestoreSyncService } from './firestoreService';
 
 const STORAGE_KEY_USERS = 'dochazka_users_v3';
@@ -7,6 +7,7 @@ const STORAGE_KEY_ENTRIES = 'dochazka_entries_v3';
 const STORAGE_KEY_CURRENT_USER = 'dochazka_auth_user_v3';
 const STORAGE_KEY_PHOTOS = 'dochazka_photos_v3';
 const STORAGE_KEY_ABSENCES = 'dochazka_absences_v3';
+const STORAGE_KEY_ADVANCES = 'dochazka_advances_v3';
 
 export const BOSS_NAME = 'Marek Dubina';
 export const BOSS_PASSWORD = 'MarekDubina4786';
@@ -875,6 +876,46 @@ class StorageService {
     const absences = this.getAbsences().filter((a) => a.id !== absenceId);
     localStorage.setItem(STORAGE_KEY_ABSENCES, JSON.stringify(absences));
     firestoreSyncService.deleteAbsenceFromFirestore(absenceId);
+    this.notify();
+  }
+
+  // --- Salary Advances ---
+  getAdvances(userId?: string, monthKey?: string): SalaryAdvance[] {
+    const raw = localStorage.getItem(STORAGE_KEY_ADVANCES);
+    if (!raw) return [];
+    try {
+      let list: SalaryAdvance[] = JSON.parse(raw);
+      if (userId) list = list.filter((a) => a.userId === userId);
+      if (monthKey) list = list.filter((a) => a.monthKey === monthKey);
+      return list;
+    } catch {
+      return [];
+    }
+  }
+
+  addAdvance(userId: string, userName: string, monthKey: string, amount: number, note: string): SalaryAdvance {
+    const advances = this.getAdvances();
+    const newAdv: SalaryAdvance = {
+      id: 'adv-' + Date.now() + '-' + Math.random().toString(36).substring(2, 5),
+      userId,
+      userName,
+      monthKey,
+      date: new Date().toISOString().substring(0, 10),
+      amount,
+      note: note.trim(),
+      createdAt: new Date().toISOString(),
+    };
+    advances.unshift(newAdv);
+    localStorage.setItem(STORAGE_KEY_ADVANCES, JSON.stringify(advances));
+    firestoreSyncService.saveAdvanceToFirestore(newAdv);
+    this.notify();
+    return newAdv;
+  }
+
+  deleteAdvance(advanceId: string) {
+    const advances = this.getAdvances().filter((a) => a.id !== advanceId);
+    localStorage.setItem(STORAGE_KEY_ADVANCES, JSON.stringify(advances));
+    firestoreSyncService.deleteAdvanceFromFirestore(advanceId);
     this.notify();
   }
 }

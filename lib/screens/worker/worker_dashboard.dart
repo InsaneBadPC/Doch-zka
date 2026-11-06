@@ -1,12 +1,19 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../models/app_user.dart';
 import '../../models/project_model.dart';
+import '../../models/salary_advance.dart';
 import '../../models/time_entry.dart';
 import '../../services/auth_service.dart';
 import '../../services/firestore_service.dart';
 import '../../services/location_service.dart';
 import '../../utils/formatters.dart';
+import '../common/absence_calendar_view.dart';
+import '../common/day_timeline_widget.dart';
+import '../common/gps_location_dialog.dart';
+import '../common/project_photos_dialog.dart';
+import '../common/share_app_dialog.dart';
 import 'shift_form_dialog.dart';
 
 class WorkerDashboard extends StatefulWidget {
@@ -26,6 +33,7 @@ class WorkerDashboard extends StatefulWidget {
 }
 
 class _WorkerDashboardState extends State<WorkerDashboard> {
+  int _selectedTabIndex = 0; // 0 = Docházka, 1 = Kalendář & Volno, 2 = Zakázky & Fotky
   DateTime _selectedMonth = DateTime.now();
   Timer? _ticker;
   String? _selectedProjectId;
@@ -118,7 +126,10 @@ class _WorkerDashboardState extends State<WorkerDashboard> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('Zakázka: ${runningEntry.projectName}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  Text(
+                    'Zakázka: ${runningEntry.projectName}',
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
                   const SizedBox(height: 4),
                   Text(
                     'Začátek: ${Formatters.formatTimeFromIso(runningEntry.startTime)} | Konec: ${Formatters.formatTimeFromIso(now.toIso8601String())}',
@@ -252,6 +263,154 @@ class _WorkerDashboardState extends State<WorkerDashboard> {
     }
   }
 
+  void _showPayslipDialog({
+    required String monthKey,
+    required List<TimeEntry> monthEntries,
+    required List<SalaryAdvance> monthAdvances,
+    required double approvedAmount,
+    required double approvedHours,
+    required double pendingAmount,
+    required double pendingHours,
+    required double advancesTotal,
+    required double netPayable,
+  }) {
+    final buffer = StringBuffer();
+    buffer.writeln('VÝPLATNÍ LÍSTEK - ${widget.currentUser.name} ($monthKey)');
+    buffer.writeln('================================================');
+    buffer.writeln('Schváleno celkem: ${Formatters.formatKcz(approvedAmount)} (${Formatters.formatHours(approvedHours)})');
+    buffer.writeln('Čeká na schválení: ${Formatters.formatKcz(pendingAmount)} (${Formatters.formatHours(pendingHours)})');
+    buffer.writeln('Vyplacené zálohy: -${Formatters.formatKcz(advancesTotal)}');
+    buffer.writeln('ČISTÝ DOPLATEK K VÝPLATĚ: ${Formatters.formatKcz(netPayable)}');
+    buffer.writeln('');
+    buffer.writeln('Datum;Zakázka;Od;Do;Pauza(min);Hodiny;Sazba;Částka(Kč);Stav;Poznámka');
+    for (final e in monthEntries) {
+      buffer.writeln(
+        '${e.date};"${e.projectName}";${Formatters.formatTimeFromIso(e.startTime)};'
+        '${e.endTime != null ? Formatters.formatTimeFromIso(e.endTime!) : ""};'
+        '${e.breakMinutes};${e.hoursWorked};${e.hourlyRate};${e.totalAmount};${e.status};"${e.note}"',
+      );
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF121513),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: const BorderSide(color: Color(0xFF232A23)),
+        ),
+        title: Row(
+          children: [
+            const Icon(Icons.receipt_long_outlined, color: Color(0xFFD4F73C)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Výplatní lístek ($monthKey)',
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF090B0A),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFF232A23)),
+                ),
+                child: Column(
+                  children: [
+                    _summaryRow('Pracovník:', widget.currentUser.name, Colors.white),
+                    const SizedBox(height: 6),
+                    _summaryRow('Odpracováno (schváleno):', Formatters.formatHours(approvedHours), Colors.white),
+                    const SizedBox(height: 6),
+                    _summaryRow('Hrubá schválená odměna:', Formatters.formatKcz(approvedAmount), const Color(0xFFD4F73C)),
+                    const SizedBox(height: 6),
+                    _summaryRow('Vyplacené zálohy:', '-${Formatters.formatKcz(advancesTotal)}', const Color(0xFFFF5B65)),
+                    const Divider(color: Color(0xFF232A23), height: 18),
+                    _summaryRow(
+                      'ČISTÝ DOPLATEK:',
+                      Formatters.formatKcz(netPayable),
+                      const Color(0xFF10B981),
+                      isBold: true,
+                    ),
+                  ],
+                ),
+              ),
+              if (monthAdvances.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                const Text(
+                  'Přehled záloh v tomto měsíci:',
+                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 6),
+                ...monthAdvances.map(
+                  (adv) => Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          '${Formatters.formatDateCz(adv.date)}${adv.note.isNotEmpty ? " · ${adv.note}" : ""}',
+                          style: const TextStyle(color: Colors.white70, fontSize: 12),
+                        ),
+                        Text(
+                          '-${Formatters.formatKcz(adv.amount)}',
+                          style: const TextStyle(color: Color(0xFFFF5B65), fontWeight: FontWeight.bold, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Zavřít'),
+          ),
+          FilledButton.icon(
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: buffer.toString()));
+              if (ctx.mounted) {
+                Navigator.of(ctx).pop();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Výplatní lístek a CSV zkopírovány do schránky!')),
+                );
+              }
+            },
+            icon: const Icon(Icons.copy, size: 16),
+            label: const Text('Zkopírovat výpis / CSV'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryRow(String label, String value, Color valueColor, {bool isBold = false}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+        Text(
+          value,
+          style: TextStyle(
+            color: valueColor,
+            fontWeight: isBold ? FontWeight.w900 : FontWeight.bold,
+            fontSize: isBold ? 15 : 13,
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final monthKey = Formatters.toMonthKey(_selectedMonth);
@@ -296,148 +455,379 @@ class _WorkerDashboardState extends State<WorkerDashboard> {
         ),
         actions: [
           IconButton(
+            icon: const Icon(Icons.share_outlined, color: Color(0xFFD4F73C)),
+            tooltip: 'Sdílet aplikaci',
+            onPressed: () {
+              showDialog(context: context, builder: (_) => const ShareAppDialog());
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.logout, color: Color(0xFF94A3B8)),
             tooltip: 'Odhlásit se',
             onPressed: () => widget.authService.signOut(),
           ),
         ],
       ),
-      body: StreamBuilder<List<ProjectModel>>(
-        stream: widget.firestoreService.streamProjects(),
-        initialData: widget.firestoreService.getProjectsSync(),
-        builder: (context, projectsSnap) {
-          final projects = projectsSnap.data ?? [];
-          final openProjects = projects.where((p) => p.isOpen).toList();
-          if (openProjects.isNotEmpty &&
-              (_selectedProjectId == null || !openProjects.any((p) => p.id == _selectedProjectId))) {
-            _selectedProjectId = openProjects.first.id;
-          }
+      body: _buildBody(monthKey),
+      bottomNavigationBar: Container(
+        decoration: const BoxDecoration(
+          border: Border(top: BorderSide(color: Color(0xFF1E251E), width: 1)),
+        ),
+        child: NavigationBar(
+          backgroundColor: const Color(0xFF090B0A),
+          indicatorColor: const Color(0xFFD4F73C),
+          selectedIndex: _selectedTabIndex,
+          onDestinationSelected: (idx) => setState(() => _selectedTabIndex = idx),
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.timer_outlined, color: Color(0xFF94A3B8)),
+              selectedIcon: Icon(Icons.timer, color: Color(0xFF090B0A)),
+              label: 'Moje směny',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.calendar_month_outlined, color: Color(0xFF94A3B8)),
+              selectedIcon: Icon(Icons.calendar_month, color: Color(0xFF090B0A)),
+              label: 'Kalendář & Volno',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.business_center_outlined, color: Color(0xFF94A3B8)),
+              selectedIcon: Icon(Icons.business_center, color: Color(0xFF090B0A)),
+              label: 'Zakázky & Fotky',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
-          return StreamBuilder<List<TimeEntry>>(
-            stream: widget.firestoreService.streamWorkerEntries(widget.currentUser.id),
-            initialData: widget.firestoreService.getWorkerEntriesSync(widget.currentUser.id),
-            builder: (context, entriesSnap) {
-              final allEntries = entriesSnap.data ?? [];
-              final runningEntry = allEntries.where((e) => e.isRunning).firstOrNull;
+  Widget _buildBody(String monthKey) {
+    if (_selectedTabIndex == 1) {
+      return AbsenceCalendarView(
+        currentUser: widget.currentUser,
+        firestoreService: widget.firestoreService,
+        isAdminView: false,
+      );
+    }
 
-              final monthEntries = allEntries.where((e) {
-                return e.date.startsWith(monthKey) && !e.isRunning;
-              }).toList();
+    return StreamBuilder<List<ProjectModel>>(
+      stream: widget.firestoreService.streamProjects(),
+      initialData: widget.firestoreService.getProjectsSync(),
+      builder: (context, projectsSnap) {
+        final projects = projectsSnap.data ?? [];
+        final openProjects = projects.where((p) => p.isOpen).toList();
+        if (openProjects.isNotEmpty &&
+            (_selectedProjectId == null || !openProjects.any((p) => p.id == _selectedProjectId))) {
+          _selectedProjectId = openProjects.first.id;
+        }
 
-              double approvedAmount = 0;
-              double approvedHours = 0;
-              double pendingAmount = 0;
-              double pendingHours = 0;
+        return StreamBuilder<List<TimeEntry>>(
+          stream: widget.firestoreService.streamWorkerEntries(widget.currentUser.id),
+          initialData: widget.firestoreService.getWorkerEntriesSync(widget.currentUser.id),
+          builder: (context, entriesSnap) {
+            final allEntries = entriesSnap.data ?? [];
 
-              for (final e in monthEntries) {
-                if (e.isApproved) {
-                  approvedAmount += e.totalAmount;
-                  approvedHours += e.hoursWorked;
-                } else if (e.isPending) {
-                  pendingAmount += e.totalAmount;
-                  pendingHours += e.hoursWorked;
+            if (_selectedTabIndex == 2) {
+              return _buildWorkerProjectsTab(projects, allEntries);
+            }
+
+            return StreamBuilder<List<SalaryAdvance>>(
+              stream: widget.firestoreService.streamAdvances(userId: widget.currentUser.id),
+              initialData: widget.firestoreService.getAdvancesSync(userId: widget.currentUser.id),
+              builder: (context, advancesSnap) {
+                final allAdvances = advancesSnap.data ?? [];
+                final monthAdvances = allAdvances.where((a) => a.monthKey == monthKey).toList();
+                final advancesTotal = monthAdvances.fold<double>(0, (sum, a) => sum + a.amount);
+
+                final runningEntry = allEntries.where((e) => e.isRunning).firstOrNull;
+                final monthEntries = allEntries.where((e) {
+                  return e.date.startsWith(monthKey) && !e.isRunning;
+                }).toList();
+
+                double approvedAmount = 0;
+                double approvedHours = 0;
+                double pendingAmount = 0;
+                double pendingHours = 0;
+
+                for (final e in monthEntries) {
+                  if (e.isApproved) {
+                    approvedAmount += e.totalAmount;
+                    approvedHours += e.hoursWorked;
+                  } else if (e.isPending) {
+                    pendingAmount += e.totalAmount;
+                    pendingHours += e.hoursWorked;
+                  }
                 }
-              }
 
-              return RefreshIndicator(
-                onRefresh: () async => setState(() {}),
-                child: ListView(
-                  padding: const EdgeInsets.all(16.0),
-                  children: [
-                    // 1. KARTA ŽIVÝCH STOPEK (FINTECH CHRONOMETR)
-                    _buildStopwatchCard(runningEntry, projects, openProjects),
-                    const SizedBox(height: 16),
+                final netPayable = approvedAmount - advancesTotal;
 
-                    // 2. PŘEPÍNAČ MĚSÍCŮ A PENĚŽENKA
-                    _buildMonthSelector(),
-                    const SizedBox(height: 12),
+                return RefreshIndicator(
+                  onRefresh: () async => setState(() {}),
+                  child: ListView(
+                    padding: const EdgeInsets.all(16.0),
+                    children: [
+                      // 1. KARTA ŽIVÝCH STOPEK (FINTECH CHRONOMETR)
+                      _buildStopwatchCard(runningEntry, projects, openProjects),
+                      const SizedBox(height: 12),
 
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildWalletCard(
-                            title: 'SCHVÁLENO K VÝPLATĚ',
-                            amount: approvedAmount,
-                            hours: approvedHours,
-                            color: const Color(0xFFD4F73C),
-                            icon: Icons.check_circle_outline,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _buildWalletCard(
-                            title: 'ČEKÁ NA SCHVÁLENÍ',
-                            amount: pendingAmount,
-                            hours: pendingHours,
-                            color: const Color(0xFFF59E0B),
-                            icon: Icons.hourglass_top_outlined,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 18),
+                      // 1b. VIZUÁLNÍ ČASOVÁ OSA DNEŠNÍHO DNE
+                      DayTimelineWidget(entries: allEntries),
+                      const SizedBox(height: 16),
 
-                    // 3. TLAČÍTKO RUČNÍHO ZÁPISU SMĚNY
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          showDialog(
-                            context: context,
-                            builder: (ctx) => ShiftFormDialog(
-                              user: widget.currentUser,
-                              projects: projects,
-                              firestoreService: widget.firestoreService,
+                      // 2. PŘEPÍNAČ MĚSÍCŮ A PENĚŽENKA
+                      _buildMonthSelector(),
+                      const SizedBox(height: 12),
+
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildWalletCard(
+                              title: 'SCHVÁLENO CELKEM',
+                              amount: approvedAmount,
+                              hours: approvedHours,
+                              color: const Color(0xFFD4F73C),
+                              icon: Icons.check_circle_outline,
                             ),
-                          );
-                        },
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFFD4F73C),
-                          backgroundColor: const Color(0xFF121513),
-                          side: const BorderSide(color: Color(0xFF2B392B)),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _buildWalletCard(
+                              title: 'ČEKÁ NA SCHVÁLENÍ',
+                              amount: pendingAmount,
+                              hours: pendingHours,
+                              color: const Color(0xFFF59E0B),
+                              icon: Icons.hourglass_top_outlined,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+
+                      // Karta Čistý doplatek & Zálohy & Výplatní lístek
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF121513),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: const Color(0xFF232A23)),
                         ),
-                        icon: const Icon(Icons.add_circle_outline, size: 18),
-                        label: const Text(
-                          'Zapsat směnu ručně',
-                          style: TextStyle(fontWeight: FontWeight.w800),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Zálohy: -${Formatters.formatKcz(advancesTotal)}',
+                                    style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Čistý doplatek: ${Formatters.formatKcz(netPayable)}',
+                                    style: const TextStyle(
+                                      color: Color(0xFF10B981),
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            OutlinedButton.icon(
+                              onPressed: () => _showPayslipDialog(
+                                monthKey: monthKey,
+                                monthEntries: monthEntries,
+                                monthAdvances: monthAdvances,
+                                approvedAmount: approvedAmount,
+                                approvedHours: approvedHours,
+                                pendingAmount: pendingAmount,
+                                pendingHours: pendingHours,
+                                advancesTotal: advancesTotal,
+                                netPayable: netPayable,
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFFD4F73C),
+                                side: const BorderSide(color: Color(0xFF2B392B)),
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              ),
+                              icon: const Icon(Icons.receipt_long_outlined, size: 16),
+                              label: const Text('Výplatní lístek', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+
+                      // 3. TLAČÍTKO RUČNÍHO ZÁPISU SMĚNY
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            showDialog(
+                              context: context,
+                              builder: (ctx) => ShiftFormDialog(
+                                user: widget.currentUser,
+                                projects: projects,
+                                firestoreService: widget.firestoreService,
+                              ),
+                            );
+                          },
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFFD4F73C),
+                            backgroundColor: const Color(0xFF121513),
+                            side: const BorderSide(color: Color(0xFF2B392B)),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          ),
+                          icon: const Icon(Icons.add_circle_outline, size: 18),
+                          label: const Text(
+                            'Zapsat směnu ručně',
+                            style: TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+
+                      // 4. SEZNAM SMĚN ZA VYBRANÝ MĚSÍC
+                      Text(
+                        'Odpracované směny (${monthEntries.length})',
+                        style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Colors.white),
+                      ),
+                      const SizedBox(height: 10),
+
+                      if (monthEntries.isEmpty)
+                        Container(
+                          padding: const EdgeInsets.all(28),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF121513),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: const Color(0xFF232A23)),
+                          ),
+                          alignment: Alignment.center,
+                          child: const Text(
+                            'V tomto měsíci zatím nemáte žádné uložené směny.',
+                            style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+                            textAlign: TextAlign.center,
+                          ),
+                        )
+                      else
+                        ...monthEntries.map((e) => _buildShiftCard(e, projects)),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildWorkerProjectsTab(List<ProjectModel> projects, List<TimeEntry> myEntries) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const Text(
+          'Zakázky a fotodokumentace',
+          style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          'Přehled vašich odpracovaných hodin na zakázkách a fotodokumentace ze stavby',
+          style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+        ),
+        const SizedBox(height: 16),
+        ...projects.map((p) {
+          final pEntries = myEntries.where((e) => e.projectId == p.id && !e.isRunning).toList();
+          final myHours = pEntries.fold<double>(0, (sum, e) => sum + e.hoursWorked);
+          final myEarned = pEntries.where((e) => e.isApproved).fold<double>(0, (sum, e) => sum + e.totalAmount);
+
+          return Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF121513),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: const Color(0xFF232A23)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        p.name,
+                        style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: p.isOpen
+                            ? const Color(0xFFD4F73C).withOpacity(0.14)
+                            : const Color(0xFF94A3B8).withOpacity(0.14),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        p.isOpen ? 'Otevřená' : 'Uzavřená',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: p.isOpen ? const Color(0xFFD4F73C) : const Color(0xFF94A3B8),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 20),
-
-                    // 4. SEZNAM SMĚN ZA VYBRANÝ MĚSÍC
-                    Text(
-                      'Odpracované směny (${monthEntries.length})',
-                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Colors.white),
-                    ),
-                    const SizedBox(height: 10),
-
-                    if (monthEntries.isEmpty)
-                      Container(
-                        padding: const EdgeInsets.all(28),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF121513),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: const Color(0xFF232A23)),
-                        ),
-                        alignment: Alignment.center,
-                        child: const Text(
-                          'V tomto měsíci zatím nemáte žádné uložené směny.',
-                          style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
-                          textAlign: TextAlign.center,
-                        ),
-                      )
-                    else
-                      ...monthEntries.map((e) => _buildShiftCard(e, projects)),
                   ],
                 ),
-              );
-            },
+                const SizedBox(height: 4),
+                Text(
+                  'Klient: ${p.client}',
+                  style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Moje hodiny: ${Formatters.formatHours(myHours)}',
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
+                        Text(
+                          'Můj schválený výdělek: ${Formatters.formatKcz(myEarned)}',
+                          style: const TextStyle(color: Color(0xFFD4F73C), fontSize: 12, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        showDialog(
+                          context: context,
+                          builder: (_) => ProjectPhotosDialog(
+                            project: p,
+                            currentUser: widget.currentUser,
+                            firestoreService: widget.firestoreService,
+                          ),
+                        );
+                      },
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFFD4F73C),
+                        side: const BorderSide(color: Color(0xFF2B392B)),
+                      ),
+                      icon: const Icon(Icons.photo_camera_outlined, size: 16),
+                      label: const Text('Fotky ze stavby'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           );
-        },
-      ),
+        }),
+      ],
     );
   }
 
@@ -555,9 +945,37 @@ class _WorkerDashboardState extends State<WorkerDashboard> {
                   ),
                 ],
               ),
-              Text(
-                'Od ${Formatters.formatTimeFromIso(runningEntry.startTime)}',
-                style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+              Row(
+                children: [
+                  if (runningEntry.startLocation != null)
+                    InkWell(
+                      onTap: () {
+                        showDialog(
+                          context: context,
+                          builder: (_) => GpsLocationDialog(entry: runningEntry),
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        margin: const EdgeInsets.only(right: 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF10B981).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.location_on, size: 12, color: Color(0xFF10B981)),
+                            SizedBox(width: 3),
+                            Text('GPS', style: TextStyle(color: Color(0xFF10B981), fontSize: 10, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  Text(
+                    'Od ${Formatters.formatTimeFromIso(runningEntry.startTime)}',
+                    style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                  ),
+                ],
               ),
             ],
           ),
@@ -720,6 +1138,8 @@ class _WorkerDashboardState extends State<WorkerDashboard> {
         statusIcon = Icons.edit_note;
     }
 
+    final hasGps = entry.startLocation != null || entry.endLocation != null;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(15.0),
@@ -736,9 +1156,38 @@ class _WorkerDashboardState extends State<WorkerDashboard> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                Formatters.formatDateCz(entry.date),
-                style: const TextStyle(fontWeight: FontWeight.w800, color: Colors.white),
+              Row(
+                children: [
+                  Text(
+                    Formatters.formatDateCz(entry.date),
+                    style: const TextStyle(fontWeight: FontWeight.w800, color: Colors.white),
+                  ),
+                  if (hasGps) ...[
+                    const SizedBox(width: 8),
+                    InkWell(
+                      onTap: () {
+                        showDialog(
+                          context: context,
+                          builder: (_) => GpsLocationDialog(entry: entry),
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF10B981).withOpacity(0.14),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.location_on, size: 11, color: Color(0xFF10B981)),
+                            SizedBox(width: 2),
+                            Text('GPS', style: TextStyle(color: Color(0xFF10B981), fontSize: 10, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),

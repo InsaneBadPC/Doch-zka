@@ -87,6 +87,17 @@ export interface Absence {
   approvedBy: string | null;
 }
 
+export interface SalaryAdvance {
+  id: string;
+  userId: string;
+  userName: string;
+  monthKey: string; // YYYY-MM
+  date: string; // YYYY-MM-DD
+  amount: number;
+  note: string;
+  createdAt: string;
+}
+
 export interface ExportColumnOptions {
   date: boolean;
   worker: boolean;

@@ -7,6 +7,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/app_user.dart';
 import '../models/project_model.dart';
 import '../models/time_entry.dart';
+import '../models/absence_model.dart';
+import '../models/project_photo.dart';
+import '../models/salary_advance.dart';
 
 class FirestoreService {
   static final FirestoreService _instance = FirestoreService._internal();
@@ -18,6 +21,9 @@ class FirestoreService {
   final List<AppUser> _users = [];
   final List<ProjectModel> _projects = [];
   final List<TimeEntry> _entries = [];
+  final List<AbsenceModel> _absences = [];
+  final List<ProjectPhoto> _photos = [];
+  final List<SalaryAdvance> _advances = [];
   bool _initialized = false;
 
   FirestoreService._internal() {
@@ -134,6 +140,42 @@ class FirestoreService {
             ..clear()
             ..addAll(loadedEntries);
         }
+
+        if (data['absences'] is List) {
+          final loadedAbsences = (data['absences'] as List)
+              .map((item) {
+                final m = Map<String, dynamic>.from(item as Map);
+                return AbsenceModel.fromMap(m['id'] as String? ?? 'abs-${DateTime.now().millisecondsSinceEpoch}', m);
+              })
+              .toList();
+          _absences
+            ..clear()
+            ..addAll(loadedAbsences);
+        }
+
+        if (data['photos'] is List) {
+          final loadedPhotos = (data['photos'] as List)
+              .map((item) {
+                final m = Map<String, dynamic>.from(item as Map);
+                return ProjectPhoto.fromMap(m['id'] as String? ?? 'pht-${DateTime.now().millisecondsSinceEpoch}', m);
+              })
+              .toList();
+          _photos
+            ..clear()
+            ..addAll(loadedPhotos);
+        }
+
+        if (data['advances'] is List) {
+          final loadedAdvances = (data['advances'] as List)
+              .map((item) {
+                final m = Map<String, dynamic>.from(item as Map);
+                return SalaryAdvance.fromMap(m['id'] as String? ?? 'adv-${DateTime.now().millisecondsSinceEpoch}', m);
+              })
+              .toList();
+          _advances
+            ..clear()
+            ..addAll(loadedAdvances);
+        }
       }
     } catch (e) {
       debugPrint('Local storage init note: $e');
@@ -206,6 +248,9 @@ class FirestoreService {
           }
           return m;
         }).toList(),
+        'absences': _absences.map((a) => {'id': a.id, ...a.toMap()}).toList(),
+        'photos': _photos.map((p) => {'id': p.id, ...p.toMap()}).toList(),
+        'advances': _advances.map((a) => {'id': a.id, ...a.toMap()}).toList(),
       };
       file.writeAsStringSync(jsonEncode(payload));
     } catch (_) {}
@@ -260,6 +305,48 @@ class FirestoreService {
             _entries.add(remote);
           } else {
             _entries[idx] = remote;
+          }
+        }
+        _notifyListeners();
+      }, onError: (_) {});
+
+      _firestore.collection('absences').snapshots().listen((snap) {
+        if (snap.docs.isEmpty) return;
+        for (final doc in snap.docs) {
+          final remote = AbsenceModel.fromMap(doc.id, doc.data());
+          final idx = _absences.indexWhere((a) => a.id == remote.id);
+          if (idx == -1) {
+            _absences.add(remote);
+          } else {
+            _absences[idx] = remote;
+          }
+        }
+        _notifyListeners();
+      }, onError: (_) {});
+
+      _firestore.collection('project_photos').snapshots().listen((snap) {
+        if (snap.docs.isEmpty) return;
+        for (final doc in snap.docs) {
+          final remote = ProjectPhoto.fromMap(doc.id, doc.data());
+          final idx = _photos.indexWhere((p) => p.id == remote.id);
+          if (idx == -1) {
+            _photos.add(remote);
+          } else {
+            _photos[idx] = remote;
+          }
+        }
+        _notifyListeners();
+      }, onError: (_) {});
+
+      _firestore.collection('advances').snapshots().listen((snap) {
+        if (snap.docs.isEmpty) return;
+        for (final doc in snap.docs) {
+          final remote = SalaryAdvance.fromMap(doc.id, doc.data());
+          final idx = _advances.indexWhere((a) => a.id == remote.id);
+          if (idx == -1) {
+            _advances.add(remote);
+          } else {
+            _advances[idx] = remote;
           }
         }
         _notifyListeners();
@@ -443,10 +530,29 @@ class FirestoreService {
 
   Future<void> deleteProject(String projectId) async {
     _projects.removeWhere((p) => p.id == projectId);
+    _photos.removeWhere((p) => p.projectId == projectId);
     _notifyListeners();
 
     unawaited(
       _firestore.collection('projects').doc(projectId).delete().catchError((_) {}),
+    );
+  }
+
+  Future<void> updateProject(ProjectModel project) async {
+    final idx = _projects.indexWhere((p) => p.id == project.id);
+    if (idx != -1) {
+      _projects[idx] = project;
+    } else {
+      _projects.add(project);
+    }
+    _notifyListeners();
+
+    unawaited(
+      _firestore
+          .collection('projects')
+          .doc(project.id)
+          .set(project.toMap(), SetOptions(merge: true))
+          .catchError((_) {}),
     );
   }
 
@@ -707,5 +813,250 @@ class FirestoreService {
     }
     _notifyListeners();
     return count;
+  }
+
+  Future<void> adminUpdateShift(
+    TimeEntry entry, {
+    bool approveImmediately = false,
+    String? adminUid,
+  }) async {
+    final toSave = approveImmediately
+        ? entry.copyWith(
+            status: 'approved',
+            approvedBy: adminUid ?? 'user-boss-marek-dubina',
+            approvedAt: Timestamp.now(),
+            adminComment: '',
+          )
+        : entry;
+
+    final idx = _entries.indexWhere((e) => e.id == toSave.id);
+    if (idx != -1) {
+      _entries[idx] = toSave;
+    } else {
+      _entries.insert(0, toSave);
+    }
+    _notifyListeners();
+
+    unawaited(
+      _firestore
+          .collection('time_entries')
+          .doc(toSave.id)
+          .set(toSave.toMap(), SetOptions(merge: true))
+          .catchError((_) {}),
+    );
+  }
+
+  Future<void> clearAllEntries() async {
+    for (final e in _entries) {
+      unawaited(
+        _firestore.collection('time_entries').doc(e.id).delete().catchError((_) {}),
+      );
+    }
+    _entries.clear();
+    _notifyListeners();
+  }
+
+  // ================= ABSENCES =================
+
+  List<AbsenceModel> getAbsencesSync([String? userId]) {
+    final list = userId == null
+        ? List<AbsenceModel>.from(_absences)
+        : _absences.where((a) => a.userId == userId).toList();
+    list.sort((a, b) => b.startDate.compareTo(a.startDate));
+    return list;
+  }
+
+  Stream<List<AbsenceModel>> streamAbsences([String? userId]) {
+    return _createReactiveStream<List<AbsenceModel>>(() => getAbsencesSync(userId));
+  }
+
+  Future<AbsenceModel> createAbsence({
+    required AppUser user,
+    required String type,
+    required String startDate,
+    required String endDate,
+    required bool isFullDay,
+    String? startTime,
+    String? endTime,
+    required String note,
+  }) async {
+    final id = 'abs-${DateTime.now().millisecondsSinceEpoch}';
+    final absence = AbsenceModel(
+      id: id,
+      userId: user.id,
+      userName: user.name,
+      type: type,
+      startDate: startDate,
+      endDate: endDate,
+      isFullDay: isFullDay,
+      startTime: startTime,
+      endTime: endTime,
+      note: note.trim(),
+      status: user.isAdmin ? 'approved' : 'pending',
+      createdAt: DateTime.now().toIso8601String(),
+      approvedBy: user.isAdmin ? user.id : null,
+    );
+
+    _absences.insert(0, absence);
+    _notifyListeners();
+
+    unawaited(
+      _firestore
+          .collection('absences')
+          .doc(id)
+          .set(absence.toMap(), SetOptions(merge: true))
+          .catchError((_) {}),
+    );
+
+    return absence;
+  }
+
+  Future<void> updateAbsenceStatus({
+    required String absenceId,
+    required String status,
+    required String adminUid,
+  }) async {
+    final idx = _absences.indexWhere((a) => a.id == absenceId);
+    if (idx != -1) {
+      _absences[idx] = _absences[idx].copyWith(
+        status: status,
+        approvedBy: adminUid,
+      );
+      final updated = _absences[idx];
+      _notifyListeners();
+
+      unawaited(
+        _firestore
+            .collection('absences')
+            .doc(absenceId)
+            .set(updated.toMap(), SetOptions(merge: true))
+            .catchError((_) {}),
+      );
+    }
+  }
+
+  Future<void> deleteAbsence(String absenceId) async {
+    _absences.removeWhere((a) => a.id == absenceId);
+    _notifyListeners();
+
+    unawaited(
+      _firestore.collection('absences').doc(absenceId).delete().catchError((_) {}),
+    );
+  }
+
+  // ================= PROJECT PHOTOS =================
+
+  List<ProjectPhoto> getProjectPhotosSync([String? projectId]) {
+    final list = projectId == null
+        ? List<ProjectPhoto>.from(_photos)
+        : _photos.where((p) => p.projectId == projectId).toList();
+    list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return list;
+  }
+
+  Stream<List<ProjectPhoto>> streamProjectPhotos([String? projectId]) {
+    return _createReactiveStream<List<ProjectPhoto>>(() => getProjectPhotosSync(projectId));
+  }
+
+  Future<ProjectPhoto> addProjectPhoto({
+    required String projectId,
+    required AppUser user,
+    required String photoData,
+    required String caption,
+  }) async {
+    final id = 'pht-${DateTime.now().millisecondsSinceEpoch}';
+    final photo = ProjectPhoto(
+      id: id,
+      projectId: projectId,
+      userId: user.id,
+      userName: user.name,
+      photoData: photoData,
+      caption: caption.trim(),
+      createdAt: DateTime.now().toIso8601String(),
+    );
+
+    _photos.insert(0, photo);
+    _notifyListeners();
+
+    unawaited(
+      _firestore
+          .collection('project_photos')
+          .doc(id)
+          .set(photo.toMap(), SetOptions(merge: true))
+          .catchError((_) {}),
+    );
+
+    return photo;
+  }
+
+  Future<void> deleteProjectPhoto(String photoId) async {
+    _photos.removeWhere((p) => p.id == photoId);
+    _notifyListeners();
+
+    unawaited(
+      _firestore.collection('project_photos').doc(photoId).delete().catchError((_) {}),
+    );
+  }
+
+  // ================= SALARY ADVANCES (ZÁLOHY) =================
+
+  List<SalaryAdvance> getAdvancesSync({String? monthKey, String? userId}) {
+    final list = _advances.where((a) {
+      if (monthKey != null && a.monthKey != monthKey) return false;
+      if (userId != null && a.userId != userId) return false;
+      return true;
+    }).toList();
+    list.sort((a, b) => b.date.compareTo(a.date));
+    return list;
+  }
+
+  Stream<List<SalaryAdvance>> streamAdvances({String? monthKey, String? userId}) {
+    return _createReactiveStream<List<SalaryAdvance>>(
+      () => getAdvancesSync(monthKey: monthKey, userId: userId),
+    );
+  }
+
+  Future<SalaryAdvance> addAdvance({
+    required String userId,
+    required String userName,
+    required String monthKey,
+    required double amount,
+    required String note,
+    String? date,
+  }) async {
+    final now = DateTime.now();
+    final id = 'adv-${now.millisecondsSinceEpoch}';
+    final adv = SalaryAdvance(
+      id: id,
+      userId: userId,
+      userName: userName,
+      monthKey: monthKey,
+      date: date ?? now.toIso8601String().substring(0, 10),
+      amount: amount,
+      note: note.trim(),
+      createdAt: now.toIso8601String(),
+    );
+
+    _advances.insert(0, adv);
+    _notifyListeners();
+
+    unawaited(
+      _firestore
+          .collection('advances')
+          .doc(id)
+          .set(adv.toMap(), SetOptions(merge: true))
+          .catchError((_) {}),
+    );
+
+    return adv;
+  }
+
+  Future<void> deleteAdvance(String advanceId) async {
+    _advances.removeWhere((a) => a.id == advanceId);
+    _notifyListeners();
+
+    unawaited(
+      _firestore.collection('advances').doc(advanceId).delete().catchError((_) {}),
+    );
   }
 }
