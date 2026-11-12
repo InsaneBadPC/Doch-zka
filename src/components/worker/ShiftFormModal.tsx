@@ -3,7 +3,8 @@ import { AppUser, GpsLocation, Project, TimeEntry } from '../../types';
 import { storageService } from '../../services/storage';
 import { formatHours, formatKcz } from '../../utils/formatters';
 import { getCurrentGpsLocation } from '../../utils/geolocation';
-import { X, Calendar, Clock, AlertTriangle, Moon, Briefcase, Coffee, FileText, MapPin, Compass } from 'lucide-react';
+import { CreateProjectModal } from '../projects/CreateProjectModal';
+import { X, Calendar, Clock, AlertTriangle, Moon, Briefcase, Coffee, FileText, MapPin, Compass, Plus } from 'lucide-react';
 
 interface ShiftFormModalProps {
   user: AppUser;
@@ -20,11 +21,22 @@ export const ShiftFormModal: React.FC<ShiftFormModalProps> = ({
   onClose,
   onSuccess,
 }) => {
-  const openProjects = projects.filter((p) => p.status === 'open' || p.id === existingEntry?.projectId);
+  const [projectList, setProjectList] = useState<Project[]>(projects);
+  const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
+
+  const openProjects = projectList.filter((p) => p.status === 'open' || p.id === existingEntry?.projectId);
 
   const [projectId, setProjectId] = useState<string>(
     existingEntry?.projectId || (openProjects.length > 0 ? openProjects[0].id : '')
   );
+
+  const handleCreateProject = (name: string, client: string, budget: number) => {
+    const newProj = storageService.createProject(name, client, budget);
+    const fresh = storageService.getProjects();
+    setProjectList(fresh);
+    setProjectId(newProj.id);
+    setIsNewProjectModalOpen(false);
+  };
 
   const todayStr = new Date().toISOString().substring(0, 10);
   const [date, setDate] = useState<string>(existingEntry?.date || todayStr);
@@ -208,17 +220,32 @@ export const ShiftFormModal: React.FC<ShiftFormModalProps> = ({
             <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
               <Briefcase className="w-3.5 h-3.5 text-[#D4F73C]" /> Zakázka *
             </label>
-            <select
-              value={projectId}
-              onChange={(e) => setProjectId(e.target.value)}
-              className="w-full px-4 py-3 bg-[#0A0D0B] border border-[#232A23] focus:border-[#D4F73C] rounded-2xl text-white text-sm focus:outline-none"
-            >
-              {openProjects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name} · {p.client} {p.status === 'closed' ? '[Uzavřeno]' : ''}
-                </option>
-              ))}
-            </select>
+            <div className="flex items-center gap-2">
+              <select
+                value={projectId}
+                onChange={(e) => setProjectId(e.target.value)}
+                className="flex-1 px-4 py-3 bg-[#0A0D0B] border border-[#232A23] focus:border-[#D4F73C] rounded-2xl text-white text-sm focus:outline-none"
+              >
+                {openProjects.length === 0 ? (
+                  <option value="">Žádná otevřená zakázka</option>
+                ) : (
+                  openProjects.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} · {p.client} {p.status === 'closed' ? '[Uzavřeno]' : ''}
+                    </option>
+                  ))
+                )}
+              </select>
+              <button
+                type="button"
+                onClick={() => setIsNewProjectModalOpen(true)}
+                className="p-3 bg-[#1A221A] hover:bg-[#D4F73C] text-slate-300 hover:text-black border border-[#2A372A] hover:border-[#D4F73C] rounded-2xl transition shrink-0 flex items-center gap-1 text-xs font-bold"
+                title="Vytvořit novou zakázku"
+              >
+                <Plus className="w-4 h-4" />
+                <span className="hidden sm:inline">Nová</span>
+              </button>
+            </div>
           </div>
 
           {/* Datum */}
@@ -355,6 +382,14 @@ export const ShiftFormModal: React.FC<ShiftFormModalProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Modal pro rychlé vytvoření zakázky */}
+      <CreateProjectModal
+        isOpen={isNewProjectModalOpen}
+        onClose={() => setIsNewProjectModalOpen(false)}
+        onSubmit={handleCreateProject}
+        isWorker={true}
+      />
     </div>
   );
 };

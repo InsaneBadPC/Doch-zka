@@ -10,6 +10,7 @@ import '../../services/firestore_service.dart';
 import '../../services/location_service.dart';
 import '../../utils/formatters.dart';
 import '../common/absence_calendar_view.dart';
+import '../common/create_project_dialog.dart';
 import '../common/day_timeline_widget.dart';
 import '../common/gps_location_dialog.dart';
 import '../common/project_photos_dialog.dart';
@@ -727,14 +728,45 @@ class _WorkerDashboardState extends State<WorkerDashboard> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        const Text(
-          'Zakázky a fotodokumentace',
-          style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900),
-        ),
-        const SizedBox(height: 4),
-        const Text(
-          'Přehled vašich odpracovaných hodin na zakázkách a fotodokumentace ze stavby',
-          style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Zakázky a fotodokumentace',
+                    style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'Přehled odpracovaných hodin a fotky ze stavby',
+                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            FilledButton.icon(
+              onPressed: () async {
+                final newProj = await showCreateProjectDialog(
+                  context: context,
+                  firestoreService: widget.firestoreService,
+                  isWorker: true,
+                );
+                if (newProj != null) {
+                  setState(() => _selectedProjectId = newProj.id);
+                }
+              },
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFD4F73C),
+                foregroundColor: const Color(0xFF090B0A),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              ),
+              icon: const Icon(Icons.add, size: 16),
+              label: const Text('Nová zakázka', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+            ),
+          ],
         ),
         const SizedBox(height: 16),
         ...projects.map((p) {
@@ -870,35 +902,92 @@ class _WorkerDashboardState extends State<WorkerDashboard> {
               ],
             ),
             const SizedBox(height: 14),
-            if (openProjects.isNotEmpty)
-              DropdownButtonFormField<String>(
-                value: openProjects.any((p) => p.id == _selectedProjectId)
-                    ? _selectedProjectId
-                    : openProjects.first.id,
-                dropdownColor: const Color(0xFF121513),
-                decoration: const InputDecoration(
-                  labelText: 'Vyberte otevřenou zakázku',
-                  prefixIcon: Icon(Icons.business_center_outlined, color: Color(0xFFD4F73C), size: 18),
+            Row(
+              children: [
+                Expanded(
+                  child: openProjects.isNotEmpty
+                      ? DropdownButtonFormField<String>(
+                          value: openProjects.any((p) => p.id == _selectedProjectId)
+                              ? _selectedProjectId
+                              : openProjects.first.id,
+                          dropdownColor: const Color(0xFF121513),
+                          decoration: const InputDecoration(
+                            labelText: 'Vyberte otevřenou zakázku',
+                            prefixIcon: Icon(Icons.business_center_outlined, color: Color(0xFFD4F73C), size: 18),
+                          ),
+                          items: openProjects.map((p) {
+                            return DropdownMenuItem(
+                              value: p.id,
+                              child: Text('${p.name} · ${p.client}', overflow: TextOverflow.ellipsis),
+                            );
+                          }).toList(),
+                          onChanged: (val) {
+                            if (val != null) setState(() => _selectedProjectId = val);
+                          },
+                        )
+                      : Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0A0D0B),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: const Color(0xFF232A23)),
+                          ),
+                          child: const Text(
+                            'Není otevřená žádná zakázka',
+                            style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+                          ),
+                        ),
                 ),
-                items: openProjects.map((p) {
-                  return DropdownMenuItem(
-                    value: p.id,
-                    child: Text('${p.name} · ${p.client}', overflow: TextOverflow.ellipsis),
-                  );
-                }).toList(),
-                onChanged: (val) {
-                  if (val != null) setState(() => _selectedProjectId = val);
-                },
-              ),
+                const SizedBox(width: 8),
+                IconButton.filledTonal(
+                  tooltip: 'Vytvořit novou zakázku',
+                  style: IconButton.styleFrom(
+                    backgroundColor: const Color(0xFF172017),
+                    foregroundColor: const Color(0xFFD4F73C),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      side: const BorderSide(color: Color(0xFF2B392B)),
+                    ),
+                    padding: const EdgeInsets.all(12),
+                  ),
+                  icon: const Icon(Icons.add_business_outlined, size: 22),
+                  onPressed: () async {
+                    final newProj = await showCreateProjectDialog(
+                      context: context,
+                      firestoreService: widget.firestoreService,
+                      isWorker: true,
+                    );
+                    if (newProj != null) {
+                      setState(() => _selectedProjectId = newProj.id);
+                    }
+                  },
+                ),
+              ],
+            ),
             const SizedBox(height: 16),
             SizedBox(
               height: 48,
               child: FilledButton.icon(
-                onPressed: (_isStartingShift || openProjects.isEmpty)
+                onPressed: _isStartingShift
                     ? null
-                    : () => _startLiveShiftDirect(projects),
-                icon: const Icon(Icons.play_arrow_rounded, size: 22),
-                label: Text(_isStartingShift ? 'Spouštím směnu...' : 'Spustit směnu (Start)'),
+                    : (openProjects.isEmpty
+                        ? () async {
+                            final newProj = await showCreateProjectDialog(
+                              context: context,
+                              firestoreService: widget.firestoreService,
+                              isWorker: true,
+                            );
+                            if (newProj != null) {
+                              setState(() => _selectedProjectId = newProj.id);
+                            }
+                          }
+                        : () => _startLiveShiftDirect(projects)),
+                icon: Icon(openProjects.isEmpty ? Icons.add_business_outlined : Icons.play_arrow_rounded, size: 22),
+                label: Text(
+                  _isStartingShift
+                      ? 'Spouštím směnu...'
+                      : (openProjects.isEmpty ? 'Vytvořit zakázku a začít' : 'Spustit směnu (Start)'),
+                ),
               ),
             ),
           ],

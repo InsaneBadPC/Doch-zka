@@ -4,6 +4,7 @@ import '../../models/project_model.dart';
 import '../../models/time_entry.dart';
 import '../../services/firestore_service.dart';
 import '../../utils/formatters.dart';
+import '../common/create_project_dialog.dart';
 
 class ShiftFormDialog extends StatefulWidget {
   final AppUser user;
@@ -26,6 +27,7 @@ class ShiftFormDialog extends StatefulWidget {
 class _ShiftFormDialogState extends State<ShiftFormDialog> {
   final _formKey = GlobalKey<FormState>();
 
+  late List<ProjectModel> _projectList;
   late String _selectedProjectId;
   late DateTime _selectedDate;
   late TimeOfDay _startTime;
@@ -40,10 +42,11 @@ class _ShiftFormDialogState extends State<ShiftFormDialog> {
   @override
   void initState() {
     super.initState();
+    _projectList = List<ProjectModel>.from(widget.projects);
     final entry = widget.existingEntry;
 
     // Výběr zakázky (pouze otevřené, pokud nevycházíme z existující)
-    final openProjects = widget.projects.where((p) => p.isOpen).toList();
+    final openProjects = _projectList.where((p) => p.isOpen).toList();
     if (entry != null) {
       _selectedProjectId = entry.projectId;
       _selectedDate = DateTime.tryParse(entry.date) ?? DateTime.now();
@@ -59,7 +62,7 @@ class _ShiftFormDialogState extends State<ShiftFormDialog> {
       _hourlyRate = entry.hourlyRate;
       _noteController = TextEditingController(text: entry.note);
     } else {
-      _selectedProjectId = openProjects.isNotEmpty ? openProjects.first.id : (widget.projects.isNotEmpty ? widget.projects.first.id : '');
+      _selectedProjectId = openProjects.isNotEmpty ? openProjects.first.id : (_projectList.isNotEmpty ? _projectList.first.id : '');
       _selectedDate = DateTime.now();
       _startTime = const TimeOfDay(hour: 7, minute: 0);
       _endTime = const TimeOfDay(hour: 15, minute: 30);
@@ -215,7 +218,7 @@ class _ShiftFormDialogState extends State<ShiftFormDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final availableProjects = widget.projects.where((p) => p.isOpen || p.id == _selectedProjectId).toList();
+    final availableProjects = _projectList.where((p) => p.isOpen || p.id == _selectedProjectId).toList();
 
     return AlertDialog(
       title: Text(widget.existingEntry == null ? 'Zapsat novou směnu' : 'Upravit směnu'),
@@ -245,24 +248,57 @@ class _ShiftFormDialogState extends State<ShiftFormDialog> {
                 ],
 
                 // Výběr zakázky
-                DropdownButtonFormField<String>(
-                  value: availableProjects.any((p) => p.id == _selectedProjectId) ? _selectedProjectId : null,
-                  dropdownColor: const Color(0xFF121513),
-                  decoration: const InputDecoration(
-                    labelText: 'Zakázka *',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.business_center_outlined),
-                  ),
-                  items: availableProjects.map((p) {
-                    return DropdownMenuItem(
-                      value: p.id,
-                      child: Text('${p.name} (${p.client})', overflow: TextOverflow.ellipsis),
-                    );
-                  }).toList(),
-                  onChanged: (val) {
-                    if (val != null) setState(() => _selectedProjectId = val);
-                  },
-                  validator: (val) => val == null || val.isEmpty ? 'Vyberte zakázku' : null,
+                Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        value: availableProjects.any((p) => p.id == _selectedProjectId) ? _selectedProjectId : null,
+                        dropdownColor: const Color(0xFF121513),
+                        decoration: const InputDecoration(
+                          labelText: 'Zakázka *',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.business_center_outlined),
+                        ),
+                        items: availableProjects.map((p) {
+                          return DropdownMenuItem(
+                            value: p.id,
+                            child: Text('${p.name} (${p.client})', overflow: TextOverflow.ellipsis),
+                          );
+                        }).toList(),
+                        onChanged: (val) {
+                          if (val != null) setState(() => _selectedProjectId = val);
+                        },
+                        validator: (val) => val == null || val.isEmpty ? 'Vyberte zakázku' : null,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton.filledTonal(
+                      tooltip: 'Vytvořit novou zakázku',
+                      style: IconButton.styleFrom(
+                        backgroundColor: const Color(0xFF172017),
+                        foregroundColor: const Color(0xFFD4F73C),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: const BorderSide(color: Color(0xFF2B392B)),
+                        ),
+                        padding: const EdgeInsets.all(12),
+                      ),
+                      icon: const Icon(Icons.add, size: 20),
+                      onPressed: () async {
+                        final newProj = await showCreateProjectDialog(
+                          context: context,
+                          firestoreService: widget.firestoreService,
+                          isWorker: true,
+                        );
+                        if (newProj != null) {
+                          setState(() {
+                            _projectList.add(newProj);
+                            _selectedProjectId = newProj.id;
+                          });
+                        }
+                      },
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 14),
 

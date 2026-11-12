@@ -1,7 +1,7 @@
 import React from 'react';
 import { Project, TimeEntry } from '../../types';
 import { formatDuration, formatKcz, formatTimeFromIso } from '../../utils/formatters';
-import { Play, Square, Briefcase, TrendingUp, Clock, Zap, MapPin, Compass } from 'lucide-react';
+import { Play, Square, Briefcase, TrendingUp, Clock, Zap, MapPin, Compass, Plus } from 'lucide-react';
 
 interface StopwatchInstrumentProps {
   runningShift?: TimeEntry;
@@ -13,6 +13,7 @@ interface StopwatchInstrumentProps {
   currentTime: number;
   isLocatingGps?: boolean;
   onOpenGpsModal?: (entry: TimeEntry) => void;
+  onOpenNewProjectModal?: () => void;
 }
 
 export const StopwatchInstrument: React.FC<StopwatchInstrumentProps> = ({
@@ -25,6 +26,7 @@ export const StopwatchInstrument: React.FC<StopwatchInstrumentProps> = ({
   currentTime,
   isLocatingGps = false,
   onOpenGpsModal,
+  onOpenNewProjectModal,
 }) => {
   const openProjects = projects.filter((p) => p.status === 'open');
   const activeProject = projects.find((p) => p.id === (runningShift ? runningShift.projectId : selectedProjectId));
@@ -98,21 +100,34 @@ export const StopwatchInstrument: React.FC<StopwatchInstrumentProps> = ({
                 ) : null}
               </div>
             ) : (
-              <select
-                value={selectedProjectId}
-                onChange={(e) => onSelectProjectId(e.target.value)}
-                className="w-full px-4 py-3.5 bg-[#0A0D0B] border border-[#232A23] focus:border-[#D4F73C] rounded-2xl text-white text-sm font-semibold focus:outline-none transition"
-              >
-                {openProjects.length === 0 ? (
-                  <option value="">Žádná otevřená zakázka</option>
-                ) : (
-                  openProjects.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} · {p.client}
-                    </option>
-                  ))
+              <div className="flex items-center gap-2">
+                <select
+                  value={selectedProjectId}
+                  onChange={(e) => onSelectProjectId(e.target.value)}
+                  className="flex-1 px-4 py-3.5 bg-[#0A0D0B] border border-[#232A23] focus:border-[#D4F73C] rounded-2xl text-white text-sm font-semibold focus:outline-none transition"
+                >
+                  {openProjects.length === 0 ? (
+                    <option value="">Žádná otevřená zakázka</option>
+                  ) : (
+                    openProjects.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} · {p.client}
+                      </option>
+                    ))
+                  )}
+                </select>
+                {onOpenNewProjectModal && (
+                  <button
+                    type="button"
+                    onClick={onOpenNewProjectModal}
+                    className="p-3.5 bg-[#171A18] hover:bg-[#D4F73C] text-slate-300 hover:text-black border border-[#232A23] hover:border-[#D4F73C] rounded-2xl transition shrink-0 flex items-center gap-1 font-bold text-xs"
+                    title="Vytvořit novou zakázku"
+                  >
+                    <Plus className="w-5 h-5" />
+                    <span className="hidden sm:inline">Nová</span>
+                  </button>
                 )}
-              </select>
+              </div>
             )}
           </div>
 

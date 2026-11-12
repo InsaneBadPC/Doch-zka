@@ -4,6 +4,7 @@ import '../../models/project_model.dart';
 import '../../models/time_entry.dart';
 import '../../services/firestore_service.dart';
 import '../../utils/formatters.dart';
+import '../common/create_project_dialog.dart';
 import '../common/project_photos_dialog.dart';
 
 class ProjectsTab extends StatefulWidget {
@@ -22,65 +23,11 @@ class ProjectsTab extends StatefulWidget {
 
 class _ProjectsTabState extends State<ProjectsTab> {
   Future<void> _createProjectDialog() async {
-    final nameCtrl = TextEditingController();
-    final clientCtrl = TextEditingController();
-    final budgetCtrl = TextEditingController(text: '80000');
-    final formKey = GlobalKey<FormState>();
-
-    final confirmed = await showDialog<bool>(
+    await showCreateProjectDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Nová zakázka', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-        content: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: nameCtrl,
-                decoration: const InputDecoration(labelText: 'Název zakázky *'),
-                validator: (val) => val == null || val.trim().isEmpty ? 'Zadejte název' : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: clientCtrl,
-                decoration: const InputDecoration(labelText: 'Zákazník / Firma *'),
-                validator: (val) => val == null || val.trim().isEmpty ? 'Zadejte zákazníka' : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: budgetCtrl,
-                decoration: const InputDecoration(labelText: 'Mzdový rozpočet (Kč) *'),
-                keyboardType: TextInputType.number,
-                validator: (val) => (val == null || double.tryParse(val) == null) ? 'Zadejte platnou částku' : null,
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Zrušit')),
-          FilledButton(
-            onPressed: () {
-              if (formKey.currentState!.validate()) Navigator.of(ctx).pop(true);
-            },
-            child: const Text('Vytvořit zakázku'),
-          ),
-        ],
-      ),
+      firestoreService: widget.firestoreService,
+      isWorker: false,
     );
-
-    if (confirmed == true) {
-      await widget.firestoreService.createProject(
-        name: nameCtrl.text,
-        client: clientCtrl.text,
-        budgetLimitKcz: double.parse(budgetCtrl.text),
-      );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Zakázka byla úspěšně založena.')),
-        );
-      }
-    }
   }
 
   Future<void> _editProjectDialog(ProjectModel project) async {

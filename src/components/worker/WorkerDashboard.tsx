@@ -15,6 +15,7 @@ import { DayTimeline } from '../common/DayTimeline';
 import { ShareAppModal } from '../common/ShareAppModal';
 import { AbsenceCalendar } from '../calendar/AbsenceCalendar';
 import { ProjectPhotosModal } from '../projects/ProjectPhotosModal';
+import { CreateProjectModal } from '../projects/CreateProjectModal';
 import { AdvancedExportModal } from '../export/AdvancedExportModal';
 import { GpsLocationModal } from '../common/GpsLocationModal';
 import { getCurrentGpsLocation } from '../../utils/geolocation';
@@ -54,6 +55,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ currentUser })
   const [advances, setAdvances] = useState<SalaryAdvance[]>([]);
   const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [activePhotoProject, setActivePhotoProject] = useState<Project | null>(null);
@@ -174,6 +176,13 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ currentUser })
     setFinishEndLocation(null);
   };
 
+  const handleCreateProject = (name: string, client: string, budget: number) => {
+    const newProj = storageService.createProject(name, client, budget);
+    setProjects(storageService.getProjects());
+    setSelectedProjectId(newProj.id);
+    setIsNewProjectModalOpen(false);
+  };
+
   const monthKey = toMonthKey(selectedMonth);
   const userMonthEntries = entries.filter(
     (e) => e.userId === currentUser.id && e.date.startsWith(monthKey) && !e.isRunning
@@ -288,6 +297,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ currentUser })
             currentTime={currentTime}
             isLocatingGps={isLocatingStartGps}
             onOpenGpsModal={(entry) => setGpsModalEntry(entry)}
+            onOpenNewProjectModal={() => setIsNewProjectModalOpen(true)}
           />
 
       {/* 2. ČASOVÁ OSA DNEŠNÍHO DNE */}
@@ -555,6 +565,14 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ currentUser })
                 Přehled firemních zakázek, váš odpracovaný čas a fotodokumentace
               </p>
             </div>
+            <button
+              type="button"
+              onClick={() => setIsNewProjectModalOpen(true)}
+              className="px-3.5 py-2 bg-[#D4F73C] hover:bg-[#c4e92a] text-[#090B0A] font-extrabold rounded-xl text-xs flex items-center justify-center gap-1.5 transition shadow-md shadow-[#D4F73C]/20 shrink-0"
+            >
+              <Plus className="w-4 h-4 stroke-[2.5]" />
+              <span>Založit zakázku</span>
+            </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -799,6 +817,14 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ currentUser })
           onClose={() => setGpsModalEntry(null)}
         />
       )}
+
+      {/* Modal pro založení nové zakázky */}
+      <CreateProjectModal
+        isOpen={isNewProjectModalOpen}
+        onClose={() => setIsNewProjectModalOpen(false)}
+        onSubmit={handleCreateProject}
+        isWorker={true}
+      />
 
       {/* Modal pro pokročilý export */}
       {isExportModalOpen && (

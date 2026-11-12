@@ -485,7 +485,7 @@ class FirestoreService {
     return _createReactiveStream<List<ProjectModel>>(() => getProjectsSync());
   }
 
-  Future<void> createProject({
+  Future<ProjectModel> createProject({
     required String name,
     required String client,
     required double budgetLimitKcz,
@@ -509,6 +509,8 @@ class FirestoreService {
           .set(project.toMap(), SetOptions(merge: true))
           .catchError((_) {}),
     );
+
+    return project;
   }
 
   Future<void> toggleProjectStatus(String projectId, String currentStatus) async {
