@@ -54,12 +54,16 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
+          flutter-version: '3.47.9'
           cache: true
 
       - name: Příprava a oprava Android struktury
         run: |
           flutter config --no-analytics
           flutter create . --platforms=android --org cz.dochazka
+          rm -f android/*.gradle.kts android/app/*.gradle.kts
+          git checkout android/build.gradle
+          git checkout android/settings.gradle
           git checkout android/app/build.gradle
           git checkout android/gradle.properties
           git checkout android/app/src/main/AndroidManifest.xml
