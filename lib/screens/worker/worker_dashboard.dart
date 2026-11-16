@@ -1364,7 +1364,7 @@ class _WorkerDashboardState extends State<WorkerDashboard> {
               ),
             ),
           ],
-          if (entry.isDraft || entry.isRejected) ...[
+          if (entry.isDraft || entry.isRejected || entry.isPending) ...[
             const SizedBox(height: 10),
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
@@ -1394,21 +1394,23 @@ class _WorkerDashboardState extends State<WorkerDashboard> {
                     );
                   },
                   icon: const Icon(Icons.edit, size: 14),
-                  label: const Text('Upravit'),
+                  label: Text(entry.isPending ? 'Upravit čekající' : 'Upravit'),
                 ),
-                const SizedBox(width: 8),
-                FilledButton.icon(
-                  onPressed: () async {
-                    await widget.firestoreService.submitDraftForApproval(entry.id);
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Směna byla odeslána ke schválení.')),
-                      );
-                    }
-                  },
-                  icon: const Icon(Icons.send, size: 14),
-                  label: const Text('Odeslat'),
-                ),
+                if (!entry.isPending) ...[
+                  const SizedBox(width: 8),
+                  FilledButton.icon(
+                    onPressed: () async {
+                      await widget.firestoreService.submitDraftForApproval(entry.id);
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Směna byla odeslána ke schválení.')),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.send, size: 14),
+                    label: const Text('Odeslat'),
+                  ),
+                ],
               ],
             ),
           ],

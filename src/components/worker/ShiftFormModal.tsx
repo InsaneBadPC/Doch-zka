@@ -196,7 +196,11 @@ export const ShiftFormModal: React.FC<ShiftFormModalProps> = ({
         <div className="flex items-center justify-between p-5 border-b border-[#1E251E]">
           <h2 className="text-base font-extrabold text-white flex items-center gap-2">
             <Clock className="w-4 h-4 text-[#D4F73C]" />
-            {existingEntry ? 'Úprava záznamu směny' : 'Zápis nové směny'}
+            {existingEntry
+              ? existingEntry.status === 'pending'
+                ? 'Úprava směny (čeká na schválení)'
+                : 'Úprava záznamu směny'
+              : 'Zápis nové směny'}
           </h2>
           <button
             onClick={onClose}
@@ -366,20 +370,42 @@ export const ShiftFormModal: React.FC<ShiftFormModalProps> = ({
           >
             Zrušit
           </button>
-          <button
-            type="button"
-            onClick={() => handleSave(false)}
-            className="px-4 py-2.5 rounded-xl text-xs font-bold bg-[#1A221A] hover:bg-[#253225] text-slate-200 transition border border-[#2A372A]"
-          >
-            Uložit koncept
-          </button>
-          <button
-            type="button"
-            onClick={() => handleSave(true)}
-            className="px-5 py-2.5 rounded-xl text-xs font-extrabold bg-[#D4F73C] hover:bg-[#c4e92a] text-[#090B0A] transition shadow-lg shadow-[#D4F73C]/20"
-          >
-            Odeslat ke schválení
-          </button>
+          {existingEntry?.status === 'pending' ? (
+            <>
+              <button
+                type="button"
+                onClick={() => handleSave(false)}
+                className="px-4 py-2.5 rounded-xl text-xs font-bold bg-[#1A221A] hover:bg-[#253225] text-slate-200 transition border border-[#2A372A]"
+                title="Vrátí směnu zpět do konceptů, aby nebyla ve frontě ke schválení"
+              >
+                Vrátit do konceptu
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSave(true)}
+                className="px-5 py-2.5 rounded-xl text-xs font-extrabold bg-[#D4F73C] hover:bg-[#c4e92a] text-[#090B0A] transition shadow-lg shadow-[#D4F73C]/20"
+              >
+                Uložit změny (čeká na schválení)
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => handleSave(false)}
+                className="px-4 py-2.5 rounded-xl text-xs font-bold bg-[#1A221A] hover:bg-[#253225] text-slate-200 transition border border-[#2A372A]"
+              >
+                Uložit koncept
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSave(true)}
+                className="px-5 py-2.5 rounded-xl text-xs font-extrabold bg-[#D4F73C] hover:bg-[#c4e92a] text-[#090B0A] transition shadow-lg shadow-[#D4F73C]/20"
+              >
+                Odeslat ke schválení
+              </button>
+            </>
+          )}
         </div>
       </div>
 

@@ -504,7 +504,7 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ currentUser })
                       </span>
                     )}
 
-                    {(entry.status === 'draft' || entry.status === 'rejected') && (
+                    {(entry.status === 'draft' || entry.status === 'rejected' || entry.status === 'pending') && (
                       <div className="flex items-center gap-1 ml-2">
                         {entry.status === 'draft' && (
                           <button
@@ -525,17 +525,19 @@ export const WorkerDashboard: React.FC<WorkerDashboardProps> = ({ currentUser })
                             setIsModalOpen(true);
                           }}
                           className="p-1.5 text-slate-400 hover:text-white transition"
-                          title="Upravit"
+                          title={entry.status === 'pending' ? 'Upravit čekající směnu' : 'Upravit'}
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => storageService.submitDraftForApproval(entry.id)}
-                          className="px-3 py-1 text-xs font-bold bg-[#D4F73C] text-[#090B0A] rounded-xl hover:bg-[#c4e92a] transition shadow-md shadow-[#D4F73C]/20"
-                        >
-                          Odeslat
-                        </button>
+                        {(entry.status === 'draft' || entry.status === 'rejected') && (
+                          <button
+                            type="button"
+                            onClick={() => storageService.submitDraftForApproval(entry.id)}
+                            className="px-3 py-1 text-xs font-bold bg-[#D4F73C] text-[#090B0A] rounded-xl hover:bg-[#c4e92a] transition shadow-md shadow-[#D4F73C]/20"
+                          >
+                            Odeslat
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>

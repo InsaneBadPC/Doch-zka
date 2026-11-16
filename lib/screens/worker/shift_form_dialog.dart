@@ -197,6 +197,8 @@ class _ShiftFormDialogState extends State<ShiftFormDialog> {
         status: status,
         isRunning: false,
         adminComment: '',
+        startLocation: widget.existingEntry?.startLocation,
+        endLocation: widget.existingEntry?.endLocation,
       );
 
       if (widget.existingEntry == null) {
@@ -221,7 +223,11 @@ class _ShiftFormDialogState extends State<ShiftFormDialog> {
     final availableProjects = _projectList.where((p) => p.isOpen || p.id == _selectedProjectId).toList();
 
     return AlertDialog(
-      title: Text(widget.existingEntry == null ? 'Zapsat novou směnu' : 'Upravit směnu'),
+      title: Text(widget.existingEntry == null
+          ? 'Zapsat novou směnu'
+          : (widget.existingEntry!.isPending
+              ? 'Upravit směnu (čeká na schválení)'
+              : 'Upravit směnu')),
       content: SingleChildScrollView(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 480),
@@ -494,15 +500,27 @@ class _ShiftFormDialogState extends State<ShiftFormDialog> {
           onPressed: _isSaving ? null : () => Navigator.of(context).pop(),
           child: const Text('Zrušit'),
         ),
-        OutlinedButton(
-          onPressed: _isSaving ? null : () => _submit(sendForApproval: false),
-          child: const Text('Uložit koncept'),
-        ),
-        FilledButton.icon(
-          onPressed: _isSaving ? null : () => _submit(sendForApproval: true),
-          icon: const Icon(Icons.send, size: 16),
-          label: const Text('Odeslat ke schválení'),
-        ),
+        if (widget.existingEntry?.isPending == true) ...[
+          OutlinedButton(
+            onPressed: _isSaving ? null : () => _submit(sendForApproval: false),
+            child: const Text('Vrátit do konceptu'),
+          ),
+          FilledButton.icon(
+            onPressed: _isSaving ? null : () => _submit(sendForApproval: true),
+            icon: const Icon(Icons.save, size: 16),
+            label: const Text('Uložit změny'),
+          ),
+        ] else ...[
+          OutlinedButton(
+            onPressed: _isSaving ? null : () => _submit(sendForApproval: false),
+            child: const Text('Uložit koncept'),
+          ),
+          FilledButton.icon(
+            onPressed: _isSaving ? null : () => _submit(sendForApproval: true),
+            icon: const Icon(Icons.send, size: 16),
+            label: const Text('Odeslat ke schválení'),
+          ),
+        ],
       ],
     );
   }
